@@ -1,10 +1,14 @@
 # Connecting HC05 to HC05
 Code to interface between two HC05s. 
 ## AnalogueRead
-AnalogueRead.ino - Arduino code to read the value of analog pin0 and sends it over bluetooth.
-plotSerialDataMPL.py - A script to plot a live graph of the data
+
+* AnalogueRead.ino - Arduino code to read the value of analog pin0 and sends it over bluetooth.
+* plotSerialDataMPL.py - A script to plot a live graph of the data
+
 ## SerialRelayBluetoothWithLEDs
-SerialRelayBluetoothWithLEDs.ino - Arduino code to recieve the data from AnalogueRead
+
+* SerialRelayBluetoothWithLEDs.ino - Arduino code to recieve the data from AnalogueRead
+
 ## Setting up HC05 in AT mode:
 To set the two HC05s up, followed [this tutorial](http://howtomechatronics.com/tutorials/arduino/how-to-configure-pair-two-hc-05-bluetooth-module-master-slave-commands/)
 

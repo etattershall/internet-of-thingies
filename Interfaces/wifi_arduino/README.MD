@@ -16,4 +16,5 @@ Connect to a given network by supplying an SSID and a password (copied directly 
 
 ## ServeWebsite
 Connects to chosen wifi network and serves a website.
-**Note: To make this software run, you need to use a much earlier version of the Arduino IDE (1.02 or earlier) because the firmware on the board itself has not been updated to be compatible with the new IDE. I am looking into updating firmware.**
+
+To run this, you need to update the firmware on the Wifi shield (for some reason they ship with ancient firmware that requires Arduino IDE 1.02 to properly use). Use the instructions here: http://www.instructables.com/id/How-to-Update-Your-Arduino-Wi-Fi-Shield-not-101/ and **not** those on the official Arduino website (almost completely useless). For the device manager step, you'll need to log in as admin, or open devmgmt.msc from an admin command prompt. 

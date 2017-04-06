@@ -1,7 +1,7 @@
 # RPI to Arduino
 
-	Pythonic interface between Pi and Arduino. Allows devices to send messages to each other, and to other members on the 
-	network using the protocol:
+	Pythonic interface between Pi and Arduino. Allows devices to send messages to each other, and to other members 
+	on the network using the protocol:
 	
 	<Source MAC address|Destination MAC address|Message Content>
 	
@@ -18,11 +18,11 @@
 	
 	
 ## Initial setup (for each device pair)
- rfkill unblock bluetooth
-	sudo bluetoothctl
-	agent on
-	scan on
-	default-agent
-	pair addr
-	1234
+- rfkill unblock bluetooth
+- sudo bluetoothctl
+- agent on
+- scan on
+- default-agent
+- pair addr
+- 1234
 	

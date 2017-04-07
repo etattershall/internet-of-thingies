@@ -32,11 +32,14 @@ sudo dpkg -i python-dev_2.7.9-1_armhf.deb
 
 ##Bluez dependencies
 
-Before we install bluex, we need to install six of its dependencies. Normally, it would be possible to get these (and all of *their* dependencies) using a package manager with the command:
+Before we install bluex, we need to install six of its dependencies. Normally, it would 
+be possible to get these (and all of *their* dependencies) using a package manager with 
+the command:
 sudo apt-get install -y libusb-dev libdbus-1-dev libglib2.0-dev libudev-dev libical-dev libreadline-dev
 
 Unfortunately, if we can't connect to the internet, we need to manually install a lot more packages 
-(.deb files found at https://packages.debian.org/search?suite=default&section=all&arch=any&searchon=names&keywords=libusb)
+(.deb files found at 
+https://packages.debian.org/search?suite=default&section=all&arch=any&searchon=names&keywords=libusb)
 
 **In this order**
 sudo dpkg -i libusb-dev_0.1.12-25_armhf.deb
@@ -101,4 +104,7 @@ Restart the Raspberry Pi! (else it will annoyingly hang with error 100: the netw
 
 ##Notes:
 
-If, when you run the example script, you get error 111: connection refused, it means that you haven't manually paired with the arduino. You can pair by clicking on the bluetooth icon in the top right hand corner, scanning, selecting your device and inputting the four digit pin (default=1234)
+If, when you run the example script, you get error 111: connection refused, it means that you 
+haven't manually paired with the arduino. You can pair by clicking on the bluetooth icon in 
+the top right hand corner, scanning, selecting your device and inputting the four digit pin 
+(default=1234)

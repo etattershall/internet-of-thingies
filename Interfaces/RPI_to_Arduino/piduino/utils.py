@@ -7,10 +7,21 @@ import warnings
 import socket, struct
 import time
 
-import bluetooth
-import bluetooth._bluetooth as _bt
 
+try:
+    import bluetooth
+    import bluetooth._bluetooth as _bt
+except ImportError:
+    warnings.warn("Bluetooth can't be imported, this must be testing...")
 
+# Define special characters
+PACKET_START = "<"
+PACKET_DIVIDE = "|"
+PACKET_END = ">"
+ESCAPE = "\\"
+
+# A list of characters to escape
+TO_ESCAPE = [PACKET_START, PACKET_DIVIDE, PACKET_END, ESCAPE]
 
 
 def notes():
@@ -48,7 +59,7 @@ def read_local_bdaddr():
     (pybluez/examples/advaced/read-local-bdaddr)
 
     Checks local device (device id = 0) and returns the bluetooth
-    address. 
+    address.
 
     Parameters
     ----------
@@ -57,14 +68,14 @@ def read_local_bdaddr():
     Returns
     -------
     string
-        Bluetooth address in the form: 
+        Bluetooth address in the form:
         '88:53:2E:86:BE:8C'
 
     """
     hci_sock = _bt.hci_open_dev(0)
     old_filter = hci_sock.getsockopt( _bt.SOL_HCI, _bt.HCI_FILTER, 14)
     flt = _bt.hci_filter_new()
-    opcode = _bt.cmd_opcode_pack(_bt.OGF_INFO_PARAM, 
+    opcode = _bt.cmd_opcode_pack(_bt.OGF_INFO_PARAM,
             _bt.OCF_READ_BD_ADDR)
     _bt.hci_filter_set_ptype(flt, _bt.HCI_EVENT_PKT)
     _bt.hci_filter_set_event(flt, _bt.EVT_CMD_COMPLETE);
@@ -86,8 +97,8 @@ def read_local_bdaddr():
     hci_sock.setsockopt( _bt.SOL_HCI, _bt.HCI_FILTER, old_filter )
     return bdaddr.encode('ascii', 'ignore')
 
-    
-def scan(address_pattern, duration=3, verbose=False): 
+
+def scan(address_pattern, duration=3, verbose=False):
     """
     Scans for nearby bluetooth devices and returns a list of addresses
 
@@ -106,7 +117,7 @@ def scan(address_pattern, duration=3, verbose=False):
     Returns
     -------
     list
-        List of bluetooth addresses; 
+        List of bluetooth addresses;
         e.g ['88:53:2E:86:BE:8C', '00:15:83:B6:76:CE'...]
 
     """
@@ -139,7 +150,7 @@ def connect(address):
     is managed by the os. For now we are ignoring passkeys; later we
     will have to write a shell script (or similar?) to call if authentication
     fails
-    
+
     Parameters
     ----------
     address : str
@@ -149,9 +160,9 @@ def connect(address):
     Returns
     -------
     BluetoothSocket
-        The bluetooth socket 
-    """ 
-    
+        The bluetooth socket
+    """
+
     if not bluetooth.is_valid_address(address):
         raise IOError("Address formatted incorrectly")
 
@@ -161,7 +172,7 @@ def connect(address):
     # ports. It should hopefully prevent port already in use errors.
     # Documentation is at www.delorie.com/gnu/docs/glibc/libc_352.html
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+
     sock.connect((address,1))
     sock.settimeout(10.0)
     return sock
@@ -179,7 +190,7 @@ def disconnect(socket):
     -------
     bool
         True if successful
-    """ 
+    """
     socket.close()
     return True
 
@@ -193,7 +204,7 @@ def package(source, destination, message, MAX_LENGTH=1024):
     ----------
     If the characters '|', '<' or '>' are present in the message, they
     will be removed and a warning will be raised.
-    
+
     Parameters
     ----------
     source : str
@@ -203,35 +214,32 @@ def package(source, destination, message, MAX_LENGTH=1024):
         want to send the message to.
     message : str
         The message to send. Must contain no '|', '>' or '<' characters.
-        
+
     Returns
     -------
     str
         The packaged message in the form
         '<source|destination|message>'
     """
-    # check message for errors (e.g. extra |)
-    if '|' in message:
-        message = message.replace('|', ' ')
-        warnings.warn("Forbidden character '|' removed from message")
-    if '<' in message or '>' in message:
-        message = re.sub('[<>]', '', message)
-        warnings.warn("Forbidden character '<' or '>' removed from message")
-    if len(message) > MAX_LENGTH:
-        raise IOError("Message greater than max message length")
     if not bluetooth.is_valid_address(source):
         raise IOError("Source address formatted incorrectly")
     if not bluetooth.is_valid_address(destination):
         raise IOError("Destination address formatted incorrectly")
-    
-    return '<'+source+'|'+destination+'|'+message+'>'
+
+    escaped = tuple(escape(item) for item in [source, destination, message])
+    eSource, eDesination, eMessage = escaped
+
+    if len(eMessage) > MAX_LENGTH:
+        raise IOError("Escaped message greater than max message length")
+
+    return '<' + eSource + '|' + eDesination + '|' + eMessage + '>'
 
 
 def unpackage(packaged_message):
     """
     Takes a packaged message in the form
-    '<source|destination|message>' 
-    and returns the separate components
+    '<source|destination|message>'
+    and returns the separate components, unescaped
 
     Parameters
     ----------
@@ -244,37 +252,54 @@ def unpackage(packaged_message):
         source
     str
         destination
-    str 
+    str
         message
     """
-    if not packaged_message.startswith('<') or not packaged_message.endswith('>'):
-        raise IOError("Invalid message: not bookended with '<>'")
-    if len(packaged_message.split('|')) != 3:
+    if(not packaged_message.startswith(PACKET_START) or
+       not packaged_message.endswith(PACKET_END)):
+        raise IOError("Invalid message: not bookended with "
+                      "'{}{}'".format(PACKET_START, PACKET_END))
+    # A list [source, destination, message] to store the packet as it is parsed
+    # char by char
+    packetData = [""]
+    charIsEscaped = False
+    for currentChar in packaged_message[1:-1]:  # remove start and end
+        # If this character is splitting sections of the packet, start a new
+        # section
+        if currentChar == PACKET_DIVIDE and not charIsEscaped:
+            packetData.append("")
+            continue  # Don't look at this character any more
+
+        # Add this character to the current section of the packet
+        if (currentChar == ESCAPE and charIsEscaped) or currentChar != ESCAPE:
+            packetData[-1] += currentChar
+
+        # Set escape flag for next character
+        charIsEscaped = currentChar == ESCAPE and not charIsEscaped
+
+    if len(packetData) != 3:
         raise IOError("Invalid message: wrong number of components")
-    
-    # Remove triangular brackets
-    packaged_message = re.sub('[<>]', '', packaged_message)
-    source, destination, message = packaged_message.split('|')
-    return source, destination, message
+
+    return tuple(packetData)
 
 
 def send_message(socket, packaged_message):
     """
     Takes a packaged message in the form
-    '<source|destination|message>' 
-    and returns the separate components
+    '<source|destination|message>'
+    and sends it to the socket
 
     Notes
     ----------
     Need to add some strong error handling
     Scenarios:
     - Device moves out of range/disconnects
-    
+
     Parameters
     ----------
     socket: BluetoothSocket
         An open bluetooth socket
-    
+
     packaged_message : str
         The packaged message in the form '<source|destination|message>'
 
@@ -291,12 +316,12 @@ def send_message(socket, packaged_message):
 def listen(socket):
     """
     Listens at a socket until it receives a message, or until it times out
-    
+
     Parameters
     ----------
     socket: BluetoothSocket
         An open bluetooth socket
-    
+
     Notes
     -----
     While we do not spcify a timeout, the while-loop
@@ -307,21 +332,80 @@ def listen(socket):
     -------
     str
         The packaged message received from the socket.
-        
+
+
 
     """
     # Initialise a variable to store incoming data in
     data = ''
     while True:
         data += socket.recv(1024)
-        # Find any sting matching the message pattern <|||> in the data
-        packaged_message = re.findall('<(.+|.+|.+)>', data.decode())
-        if len(packaged_message) > 0:
-            # Once we have a message, terminate
-            return '<'+packaged_message[0]+'>'
-        
-    return ''
+        packaged_message = ""  # Will store a raw message "<..|..|..>"
+        charIsEscaped = False
+        # Set to true on PACKET_START upto PACKET_END
+        insidePacket = False
+        # Step through each character one at a time
+        for currentChar in data:
+            # If this is the start of the packet, set the flag to store it
+            if currentChar == PACKET_START and not charIsEscaped:
+                insidePacket = True
+
+            # Check only escaped characters are escaped
+            if charIsEscaped:
+                if currentChar not in TO_ESCAPE:
+                    warnings.warn("Wrongly escaped character")
+
+            # Add this character if in the packet
+            if insidePacket:
+                packaged_message += currentChar
+
+            # Deal with the end of the packet
+            if currentChar == PACKET_END and not charIsEscaped:
+                insidePacket = False
+                return packaged_message
+
+            # Set up the charIsEscaped flag for the next char
+            charIsEscaped = currentChar == ESCAPE and not charIsEscaped
+
+    return ""
 
 
+def escape(text):
+    """
+    Escapes the special characters from a string
 
+    Parameters
+    ----------
+    text: str
+        string to be escaped
 
+    Returns
+    -------
+    str
+        escaped string
+
+    Notes
+    -----
+    Could be done completely with regex, something like:
+        regex = r"([" + r"".join(re.escape(char) for char in TO_ESCAPE) + r"])"
+        return re.sub(regex, re.escape(ESCAPE) + r"\1", text)
+    But:
+        1) May cause issues if TO_ESCAPE contains a regex character eg "]"
+        2) Wouldn't work if we wanted to send bytes rather than strings later?
+        3) Arudino doesn't have re library so easier to ensure that method
+           is same (copy the code, change the syntax).
+    """
+
+    currentIndex = 0
+    while currentIndex < len(text):
+        # Go through one character at a time
+        if text[currentIndex] in TO_ESCAPE:
+            # If this char needs escaping, add an escape before it.
+            # text:            "aad\asdf"
+            # current index:       ^
+            # new text:        "add\\asdf"
+            # updated index:        ^
+            text = text[:currentIndex] + ESCAPE + text[currentIndex:]
+            currentIndex += 1  # Update the index
+        currentIndex += 1
+    return text

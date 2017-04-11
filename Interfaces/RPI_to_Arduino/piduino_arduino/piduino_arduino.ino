@@ -46,10 +46,10 @@ String incoming_packaged_message = "";
 SoftwareSerial bluetooth(rxpin, txpin);
 
 void setup() {
-  //Initialize Serial for debugging purposes
+  // Initialize Serial for debugging purposes
   Serial.begin(9600);
-  //Initialize the bluetooth
-  bluetooth.begin(9600);
+  // Initialize the bluetooth using the default baud rate
+  bluetooth.begin(38400);
 }
 
 void loop() {

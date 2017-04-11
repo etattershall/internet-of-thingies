@@ -156,17 +156,25 @@ def connect(address):
         raise IOError("Address formatted incorrectly")
 
     sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-
+    
     # The line below allow allows for the reuse of addresses and
     # ports. It should hopefully prevent port already in use errors.
     # Documentation is at www.delorie.com/gnu/docs/glibc/libc_352.html
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+
     sock.connect((address,1))
-    sock.settimeout(10.0)
+
+    # Set a timeout. This may need to be added as an argument to this
+    # function
+    sock.settimeout(2.0)
+    
+    # Set the socket as non-blocking. This means that if we call listen(),
+    # and the socket doesn't send anything, then it doesn't throw an error
+    sock.setblocking(0)
+    
     return sock
 
-def disconnect(socket):
+def disconnect(sock):
     """
     Closes a bluetooth socket, handles errors
 
@@ -180,7 +188,7 @@ def disconnect(socket):
     bool
         True if successful
     """ 
-    socket.close()
+    sock.close()
     return True
 
 
@@ -258,7 +266,7 @@ def unpackage(packaged_message):
     return source, destination, message
 
 
-def send_message(socket, packaged_message):
+def send_message(sock, packaged_message):
     """
     Takes a packaged message in the form
     '<source|destination|message>' 
@@ -285,10 +293,10 @@ def send_message(socket, packaged_message):
         False: fail
 
     """
-    socket.send(packaged_message)
+    sock.send(packaged_message)
     return True
 
-def listen(socket):
+def listen(sock):
     """
     Listens at a socket until it receives a message, or until it times out
     
@@ -313,9 +321,11 @@ def listen(socket):
     # Initialise a variable to store incoming data in
     data = ''
     while True:
-        data += socket.recv(1024)
+        data += sock.recv(4096)
+        print(data)
         # Find any sting matching the message pattern <|||> in the data
-        packaged_message = re.findall('<(.+|.+|.+)>', data.decode())
+        # Later, errors should be logged
+        packaged_message = re.findall('<(.+|.+|.+)>', data.decode(errors="ignore"))
         if len(packaged_message) > 0:
             # Once we have a message, terminate
             return '<'+packaged_message[0]+'>'
@@ -323,5 +333,7 @@ def listen(socket):
     return ''
 
 
-
+#def quick_listen(sock):
+#    data = sock.recv(8192)
+#    return data
 

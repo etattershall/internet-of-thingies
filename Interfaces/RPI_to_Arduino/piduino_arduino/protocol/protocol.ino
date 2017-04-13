@@ -1,9 +1,18 @@
 /*
  * Program to test the toy message protocol with escaping piduino (10-04-2017)
- * 
+ *
  * Connections are made by the Pi, not the Arduino. The Arduino simply listens for
  * incoming connections
  *
+ * This script simply echoes any message recived back to the PI.
+ *
+ * To implement later:
+  * Responsive AT mode. Can AT mode even be entered while connected (probably not-
+  * will have to send a BRB message)
+  *
+  * Authentication. When Pi connects for the first time, both have to authenticate with
+  * pgp - each device has a private key of their own, and the public key of the pinnacle of
+  * the pyramid (the pi in this case)
  */
 
 // If SoftwareSerial is not included, we can't use the normal PC serial terminal and
@@ -16,8 +25,8 @@ const char PACKET_END = 62;     /* >  */
 const char ESCAPE = 92;         /* \  */
 const char TO_ESCAPE[] = {PACKET_START, PACKET_DIVIDE, PACKET_END, ESCAPE};
 
-const String device_name = "H-C-2010-06-01";
-const String device_address = "98:D3:32:10:82:D4";
+const String device_name = "SCD_ARDUINO_2";
+const String device_address = "98:D3:32:10:8E:5D";
 
 //Define the pins used for receiving and transmitting information via Bluetooth
 const int rxpin = 10;
@@ -92,7 +101,7 @@ void loop() {
       };
 
 
-      
+
       bluetooth.println(package_message(outgoing_message));
     }
 
@@ -107,8 +116,8 @@ void loop() {
 
 String package_message(Message message){
   // Takes a Message object and packages it, ready to send via bluetooth
-  String packaged_message = "<" + escape(message.source) + "|" + 
-                                  escape(message.destination) + "|" + 
+  String packaged_message = "<" + escape(message.source) + "|" +
+                                  escape(message.destination) + "|" +
                                   escape(message.content) + ">";
   Serial.print("Sending:");
   Serial.println(packaged_message);

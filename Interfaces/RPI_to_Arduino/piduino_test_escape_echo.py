@@ -1,3 +1,14 @@
+'''
+A (very) basic test of the escaping. This script adapts 'pyduino_example.py'
+to send a number of different strings to the arduino. The arduino echoes them
+back and the script checks that they are the same (having been escaped to be
+sent and then unescaped and reescaped on the arduino and finally unescaped
+on the PI)
+
+The arduino should load protocol.ino which is setup to echo anything which is
+sent back to the PI
+'''
+
 from piduino import utils
 
 ESCAPE = utils.ESCAPE

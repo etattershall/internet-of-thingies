@@ -21,3 +21,15 @@ After removing the HC-05 from the list of paired devices, I attempted to use the
 This suggestst that `simple-agent` can be adapted for automatic pairing.
 
 ### Adapting the simple-agent python script
+1. The `bluezutils.py` script is not needed unless actively trying to pair with a device. It is only used when the script is called with arguments so my testing before didn't use it.
+2. This [link](https://kernel.googlesource.com/pub/scm/bluetooth/bluez/+/5.16/doc/agent-api.txt) explains what each of the methods should do.
+3. Changed KeyboardDisplay to DisplayYesNo according to [this](https://books.google.co.uk/books?id=-LMq0NhoEQgC&pg=PA218&lpg=PA218&dq=NoInputNoOutput+capability&source=bl&ots=AYuXvgODVw&sig=ghynBpB0WKNjXtBrnQqHO-abtLI&hl=en&sa=X&ved=0ahUKEwjb_oPNiK7TAhWMDcAKHU-QAHwQ6AEITjAG#v=onepage&q=NoInputNoOutput%20capability&f=false)
+
+## Notes
+### GUI compatibility
+When using the python agent, there is still a GUI pairing request on the screen. E.g. 'Do you want to pair with this device (cancel) (yes)'.
+- By doing **nothing** then the python agent handles the request successfully and the pairing works (although this message isn't dismissed)
+- By **accepting** this pairing request then the device gets paired - this python script to supposed to remove this human interaction
+- By **declining** this pairing request then the device is paired by the python script and (assuming responding to the GUI is slower than the script) then immediately unpaired.
+
+**Don't click cancel on the GUI pairing request**

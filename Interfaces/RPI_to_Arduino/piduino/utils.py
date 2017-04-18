@@ -167,17 +167,25 @@ def connect(address):
         raise IOError("Address formatted incorrectly")
 
     sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-
+    
     # The line below allow allows for the reuse of addresses and
     # ports. It should hopefully prevent port already in use errors.
     # Documentation is at www.delorie.com/gnu/docs/glibc/libc_352.html
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     sock.connect((address,1))
-    sock.settimeout(10.0)
+
+    # Set a timeout. This may need to be added as an argument to this
+    # function
+    sock.settimeout(2.0)
+    
+    # Set the socket as non-blocking. This means that if we call listen(),
+    # and the socket doesn't send anything, then it doesn't throw an error
+    sock.setblocking(0)
+    
     return sock
 
-def disconnect(socket):
+def disconnect(sock):
     """
     Closes a bluetooth socket, handles errors
 
@@ -190,8 +198,9 @@ def disconnect(socket):
     -------
     bool
         True if successful
-    """
-    socket.close()
+
+    """ 
+    sock.close()
     return True
 
 
@@ -283,7 +292,7 @@ def unpackage(packaged_message):
     return tuple(packetData)
 
 
-def send_message(socket, packaged_message):
+def send_message(sock, packaged_message):
     """
     Takes a packaged message in the form
     '<source|destination|message>'
@@ -310,10 +319,10 @@ def send_message(socket, packaged_message):
         False: fail
 
     """
-    socket.send(packaged_message)
+    sock.send(packaged_message)
     return True
 
-def listen(socket):
+def listen(sock):
     """
     Listens at a socket until it receives a message, or until it times out
 
@@ -339,7 +348,7 @@ def listen(socket):
     # Initialise a variable to store incoming data in
     data = ''
     while True:
-        data += socket.recv(1024)
+        data += sock.recv(1024)
         packaged_message = ""  # Will store a raw message "<..|..|..>"
         charIsEscaped = False
         # Set to true on PACKET_START upto PACKET_END
@@ -359,11 +368,12 @@ def listen(socket):
             if insidePacket:
                 packaged_message += currentChar
 
+
             # Deal with the end of the packet
             if currentChar == PACKET_END and not charIsEscaped:
                 insidePacket = False
                 return packaged_message
-
+              
             # Set up the charIsEscaped flag for the next char
             charIsEscaped = currentChar == ESCAPE and not charIsEscaped
 

@@ -53,13 +53,14 @@ class Agent(dbus.service.Object):
     def RequestPinCode(self, device):
         print("RequestPinCode (%s)" % (device))
         set_trusted(device)
-        return input("PIN")
+        return raw_input("PIN")
 
     # In object 32bituint 16bituint
     @dbus.service.method(AGENT_INTERFACE, in_signature="ouq", out_signature="")
     def DisplayPasskey(self, device, passkey, entered):
         print("DisplayPasskey (%s, %06u entered %u)" % (device, passkey,
                                                         entered))
+
     # In object string
     @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
     def DisplayPinCode(self, device, pincode):

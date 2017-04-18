@@ -16,10 +16,6 @@ device_obj = None
 dev_path = None
 
 
-def ask(question):
-    print("Would ask ", question)
-
-
 def set_trusted(path):
     props = dbus.Interface(bus.get_object("org.bluez", path),
                            "org.freedesktop.DBus.Properties")
@@ -30,12 +26,17 @@ class Rejected(dbus.DBusException):
     _dbus_error_name = "org.bluez.Error.Rejected"
 
 
+class NotImplementedMethodCall(NotImplementedError):
+    '''Raised when calling an Agent method which hasn't been implemented.
+
+    From testing and the documentation, for a simple automatic pairing with
+    a HC-05, Agent.RequestPinCode() is the only method that is used. The other
+    methods raise this error to point out that they probably should be
+    implemented.'''
+    pass
+
+
 class Agent(dbus.service.Object):
-    exit_on_release = True
-
-    def set_exit_on_release(self, exit_on_release):
-        self.exit_on_release = exit_on_release
-
     @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Release(self):
         '''
@@ -44,9 +45,7 @@ class Agent(dbus.service.Object):
         the agent, because when this method gets called it has already been
         unregistered.
         '''
-        print("Release")
-        if self.exit_on_release:
-            mainloop.quit()
+        raise NotImplementedMethodCall("Release")
 
     # In object, out string
     @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="s")
@@ -77,8 +76,9 @@ class Agent(dbus.service.Object):
         should be zero-padded at the start if the value contains less than 6
         digits.
         '''
-        print("DisplayPasskey (%s, %06u entered %u)" % (device, passkey,
-                                                        entered))
+        content = "DisplayPasskey(%s, %06u entered %u)" % (device, passkey,
+                                                           entered)
+        raise NotImplementedMethodCall(content)
 
     # In object string
     @dbus.service.method(AGENT_INTERFACE, in_signature="os", out_signature="")
@@ -98,7 +98,8 @@ class Agent(dbus.service.Object):
         Possible errors: org.bluez.Error.Rejected
                          org.bluez.Error.Canceled
         '''
-        print("DisplayPinCode (%s, %s)" % (device, pincode))
+        raise NotImplementedMethodCall("DisplayPinCode(%s, %s)" %
+                                       (device, pincode))
 
     # In object 32bituint
     @dbus.service.method(AGENT_INTERFACE, in_signature="ou", out_signature="")
@@ -113,12 +114,9 @@ class Agent(dbus.service.Object):
         Possible errors: org.bluez.Error.Rejected
                          org.bluez.Error.Canceled
         '''
-        print("RequestConfirmation (%s, %06d)" % (device, passkey))
-        confirm = ask("Confirm passkey (yes/no): ")
-        if (confirm == "yes"):
-            set_trusted(device)
-            return
-        raise Rejected("Passkey doesn't match")
+        raise NotImplementedMethodCall("RequestConfirmation(%s, %06d)" %
+                                       (device, passkey))
+        raise Rejected("Not Implemented")
 
     # In object
     @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="")
@@ -131,11 +129,8 @@ class Agent(dbus.service.Object):
         Possible errors: org.bluez.Error.Rejected
                          org.bluez.Error.Canceled
         '''
-        print("RequestAuthorization (%s)" % (device))
-        auth = ask("Authorize? (yes/no): ")
-        if (auth == "yes"):
-            return
-        raise Rejected("Pairing rejected")
+        raise NotImplementedMethodCall("RequestAuthorization (%s)" % (device))
+        raise Rejected("Not Implemented")
 
     @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Cancel(self):
@@ -143,13 +138,13 @@ class Agent(dbus.service.Object):
         This method gets called to indicate that the agent request failed
         before a reply was returned.
         '''
-        print("Cancel")
+        raise NotImplementedMethodCall("Cancel")
 
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
-    capability = "KeyboardDisplay"
+    capability = "DisplayYesNo"
     agent = Agent(bus, AGENT_PATH)
     mainloop = GObject.MainLoop()
     obj = bus.get_object(BUS_NAME, "/org/bluez")

@@ -26,12 +26,6 @@ def set_trusted(path):
     props.Set("org.bluez.Device1", "Trusted", True)
 
 
-def dev_connect(path):
-    dev = dbus.Interface(bus.get_object("org.bluez", path),
-                         "org.bluez.Device1")
-    dev.Connect()
-
-
 class Rejected(dbus.DBusException):
     _dbus_error_name = "org.bluez.Error.Rejected"
 
@@ -88,23 +82,6 @@ class Agent(dbus.service.Object):
     @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Cancel(self):
         print("Cancel")
-
-
-def pair_reply():
-    print("Device paired")
-    set_trusted(dev_path)
-    dev_connect(dev_path)
-    mainloop.quit()
-
-
-def pair_error(error):
-    err_name = error.get_dbus_name()
-    if err_name == "org.freedesktop.DBus.Error.NoReply" and device_obj:
-        print("Timed out. Cancelling pairing")
-        device_obj.CancelPairing()
-    else:
-        print("Creating device failed: %s" % (error))
-    mainloop.quit()
 
 
 if __name__ == '__main__':

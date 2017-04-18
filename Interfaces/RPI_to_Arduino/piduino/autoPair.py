@@ -109,22 +109,16 @@ def pair_error(error):
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-
     bus = dbus.SystemBus()
-
     capability = "KeyboardDisplay"
-
-    path = "/test/agent"
-    agent = Agent(bus, path)
-
+    agent = Agent(bus, AGENT_PATH)
     mainloop = GObject.MainLoop()
-
     obj = bus.get_object(BUS_NAME, "/org/bluez")
     manager = dbus.Interface(obj, "org.bluez.AgentManager1")
-    manager.RegisterAgent(path, capability)
+    manager.RegisterAgent(AGENT_PATH, capability)
 
     print("Agent registered")
 
-    manager.RequestDefaultAgent(path)
+    manager.RequestDefaultAgent(AGENT_PATH)
 
     mainloop.run()

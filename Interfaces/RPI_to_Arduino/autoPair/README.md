@@ -19,3 +19,5 @@ After removing the HC-05 from the list of paired devices, I attempted to use the
 5. In the original terminal, simple-agent requests a PIN. After entering the PIN, the device is paired without using bluetoothctl and `Connection refused` error isn't raised.
 
 This suggestst that `simple-agent` can be adapted for automatic pairing.
+
+### Adapting the simple-agent python script

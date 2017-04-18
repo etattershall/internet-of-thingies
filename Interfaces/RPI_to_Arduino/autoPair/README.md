@@ -12,8 +12,8 @@ PyBluez [does not support pairing management](http://stackoverflow.com/questions
 
 ### Using the simple-agent python script
 After removing the HC-05 from the list of paired devices, I attempted to use the `simple-agent` python script to initiate the pairing request.
-1. Copy `simple-agent.py` and its one dependency `bluezutils.py` into a directory
-2. In one terminal run `python simple-agent.py`
+1. Copy `simple-agent` and its one dependency `bluezutils.py` into a directory
+2. In one terminal run `python simple-agent`
 3. In another, run a python script that uses `piduino.utils.connect` eg `piduino_example.py`
 4. This hangs on 'Attempting to connect to device...'
 5. In the original terminal, simple-agent requests a PIN. After entering the PIN, the device is paired without using bluetoothctl and `Connection refused` error isn't raised.

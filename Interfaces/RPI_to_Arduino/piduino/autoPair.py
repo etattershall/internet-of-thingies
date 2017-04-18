@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 from __future__ import absolute_import, print_function, unicode_literals
 
 import dbus
@@ -12,8 +11,6 @@ AGENT_INTERFACE = 'org.bluez.Agent1'
 AGENT_PATH = "/test/agent"
 
 bus = None
-device_obj = None
-dev_path = None
 
 
 def set_trusted(path):
@@ -37,16 +34,28 @@ class NotImplementedMethodCall(NotImplementedError):
 
 
 class Agent(dbus.service.Object):
-    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
-    def Release(self):
-        '''
-        This method gets called when the service daemon unregisters the agent.
-        An agent can use it to do cleanup tasks. There is no need to unregister
-        the agent, because when this method gets called it has already been
-        unregistered.
-        '''
-        raise NotImplementedMethodCall("Release")
+    '''
+    A bluetooth agent object that is made avaliable to other applications over
+    dbus.
 
+    Usage:
+        agent = Agent(bus, path)
+            bus = dbus.SystemBus() or dbus.SessionBus()
+            path = dbus object path to export this agent
+
+    Implemented methods:
+        - DisplayPinCode(self, device, pincode)
+
+    Methods that raise 'NotImplementedMethodCall' in case they are used:
+        - Release(self)
+        - RequestPinCode(self, device)
+        - DisplayPasskey(self, device, passkey, entered)
+        - RequestConfirmation(self, device, passkey)
+        - RequestAuthorization(self, device)
+        - Cancel(self)
+
+    see https://dbus.freedesktop.org/doc/dbus-python/doc/tutorial.html#id31
+    '''
     # In object, out string
     @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
@@ -60,6 +69,18 @@ class Agent(dbus.service.Object):
         print("RequestPinCode (%s)" % (device))
         set_trusted(device)
         return raw_input("PIN")
+
+    # --------------- The following methods aren't implemented ----------------
+
+    @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
+    def Release(self):
+        '''
+        This method gets called when the service daemon unregisters the agent.
+        An agent can use it to do cleanup tasks. There is no need to unregister
+        the agent, because when this method gets called it has already been
+        unregistered.
+        '''
+        raise NotImplementedMethodCall("Release")
 
     # In object 32bituint 16bituint
     @dbus.service.method(AGENT_INTERFACE, in_signature="ouq", out_signature="")
@@ -142,17 +163,28 @@ class Agent(dbus.service.Object):
 
 
 if __name__ == '__main__':
+    # Arrange for the glib mainloop to be the default - for async calls
+    # this must be done *before* contacting the bus
+    # https://dbus.freedesktop.org/doc/dbus-python/doc/tutorial.html#id31
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+    # Create a bus
     bus = dbus.SystemBus()
+
+    # Set the device capability to DisplayYesNo - HC05 doesn't seem to take
+    # this into account
     capability = "DisplayYesNo"
+
+    # Create an agent that can be accessed at AGENT_PATH
     agent = Agent(bus, AGENT_PATH)
-    mainloop = GObject.MainLoop()
+
+    # Register the agent
     obj = bus.get_object(BUS_NAME, "/org/bluez")
     manager = dbus.Interface(obj, "org.bluez.AgentManager1")
     manager.RegisterAgent(AGENT_PATH, capability)
-
     print("Agent registered")
-
     manager.RequestDefaultAgent(AGENT_PATH)
 
+    # Create a mainloop for aync calls
+    mainloop = GObject.MainLoop()
     mainloop.run()

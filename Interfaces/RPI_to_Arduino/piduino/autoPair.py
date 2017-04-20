@@ -1,26 +1,27 @@
 #!/usr/bin/python
+
+'''
+Adapted from:
+https://github.com/r10r/bluez/blob/master/test/simple-agent
+'''
 from __future__ import absolute_import, print_function, unicode_literals
 
+
+# Import different dbus libraries necessary to setup and register the agent
 import dbus
 import dbus.service
 import dbus.mainloop.glib
+# Use GObject for a 'mainloop' to run in background
 from gi.repository import GObject
 
+# Set this to your HC_05_PIN, to avoid uploading to github
+from secret import HC_05_PIN
+
+# Define some globals used by bluez dbus. These haven't been changed from the
+# original code (see 'Adapted from:')
 BUS_NAME = 'org.bluez'
 AGENT_INTERFACE = 'org.bluez.Agent1'
 AGENT_PATH = "/test/agent"
-
-bus = None
-
-
-def set_trusted(path):
-    props = dbus.Interface(bus.get_object("org.bluez", path),
-                           "org.freedesktop.DBus.Properties")
-    props.Set("org.bluez.Device1", "Trusted", True)
-
-
-class Rejected(dbus.DBusException):
-    _dbus_error_name = "org.bluez.Error.Rejected"
 
 
 class NotImplementedMethodCall(NotImplementedError):
@@ -40,22 +41,57 @@ class Agent(dbus.service.Object):
 
     Usage:
         agent = Agent(bus, path)
-            bus = dbus.SystemBus() or dbus.SessionBus()
-            path = dbus object path to export this agent
 
-    Implemented methods:
-        - DisplayPinCode(self, device, pincode)
+    Normal Methods:
+        - __init__(self, bus, object_path)
+        - set_trusted(self, path)
 
-    Methods that raise 'NotImplementedMethodCall' in case they are used:
-        - Release(self)
-        - RequestPinCode(self, device)
-        - DisplayPasskey(self, device, passkey, entered)
-        - RequestConfirmation(self, device, passkey)
-        - RequestAuthorization(self, device)
-        - Cancel(self)
+    The following methods work with dbus.service.Object
+        Implemented methods:
+            - DisplayPinCode(self, device, pincode)
+
+        Methods that raise 'NotImplementedMethodCall' in case they are used:
+            - Release(self)
+            - RequestPinCode(self, device)
+            - DisplayPasskey(self, device, passkey, entered)
+            - RequestConfirmation(self, device, passkey)
+            - RequestAuthorization(self, device)
+            - Cancel(self)
 
     see https://dbus.freedesktop.org/doc/dbus-python/doc/tutorial.html#id31
     '''
+    def __init__(self, bus, object_path):
+        '''
+        The class setup function. This is only implemented to store the bus
+        object within the class rather than a global variable
+
+        This function takes the same arguments as the parent class
+        (dbus.service.Object).
+
+        bus:
+        dbus.SystemBus() or dbus.SessionBus()
+
+        object_path:
+        An object path to export under eg "/test/Agent"
+        '''
+        # Defining this __init__ method overrides the parent __init__
+        # method. Call the parent __init__ method here to make up for this.
+        dbus.service.Object.__init__(self, bus, object_path)
+        # Store the bus for use with set_trusted.
+        self.stored_bus = bus
+
+    def set_trusted(self, path):
+        '''
+        A function to set the device as trusted. It uses self.stored_bus which
+        is set in the __init__ method.
+
+        path:
+        The 'device' parameter as passed to self.RequestPinCode
+        '''
+        props = dbus.Interface(self.stored_bus.get_object("org.bluez", path),
+                               "org.freedesktop.DBus.Properties")
+        props.Set("org.bluez.Device1", "Trusted", True)
+
     # In object, out string
     @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="s")
     def RequestPinCode(self, device):
@@ -67,8 +103,8 @@ class Agent(dbus.service.Object):
                          org.bluez.Error.Canceled
         '''
         print("RequestPinCode (%s)" % (device))
-        set_trusted(device)
-        return raw_input("PIN")
+        self.set_trusted(device)
+        return str(HC_05_PIN)
 
     # --------------- The following methods aren't implemented ----------------
 
@@ -137,7 +173,6 @@ class Agent(dbus.service.Object):
         '''
         raise NotImplementedMethodCall("RequestConfirmation(%s, %06d)" %
                                        (device, passkey))
-        raise Rejected("Not Implemented")
 
     # In object
     @dbus.service.method(AGENT_INTERFACE, in_signature="o", out_signature="")
@@ -151,7 +186,6 @@ class Agent(dbus.service.Object):
                          org.bluez.Error.Canceled
         '''
         raise NotImplementedMethodCall("RequestAuthorization (%s)" % (device))
-        raise Rejected("Not Implemented")
 
     @dbus.service.method(AGENT_INTERFACE, in_signature="", out_signature="")
     def Cancel(self):
@@ -162,29 +196,50 @@ class Agent(dbus.service.Object):
         raise NotImplementedMethodCall("Cancel")
 
 
+class RunningAgent():
+    '''A class that sets up the GObject mainloop (the loop that is running)
+    to provide the agent.
+
+    It stores the mainloop as 'self.mainloop' until
+    the close method is called which closes the mainloop.
+    '''
+    def __init__(self):
+        # Arrange for the glib mainloop to be the default - for async calls
+        # this must be done *before* contacting the bus
+        # https://dbus.freedesktop.org/doc/dbus-python/doc/tutorial.html#id31
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+        # Create a bus
+        bus = dbus.SystemBus()
+
+        # Set the device capability to DisplayYesNo - HC05 doesn't seem to take
+        # this into account
+        capability = "DisplayYesNo"
+
+        # Create an agent that can be accessed at AGENT_PATH
+        Agent(bus, AGENT_PATH)
+
+        # Register the agent
+        obj = bus.get_object(BUS_NAME, "/org/bluez")
+        manager = dbus.Interface(obj, "org.bluez.AgentManager1")
+        manager.RegisterAgent(AGENT_PATH, capability)
+        print("Agent registered")
+        manager.RequestDefaultAgent(AGENT_PATH)
+
+        # Create a mainloop for aync calls
+        self.mainloop = GObject.MainLoop()
+        self.mainloop.run()
+
+    def close(self):
+        self.mainloop.quit()
+
+
 if __name__ == '__main__':
-    # Arrange for the glib mainloop to be the default - for async calls
-    # this must be done *before* contacting the bus
-    # https://dbus.freedesktop.org/doc/dbus-python/doc/tutorial.html#id31
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-
-    # Create a bus
-    bus = dbus.SystemBus()
-
-    # Set the device capability to DisplayYesNo - HC05 doesn't seem to take
-    # this into account
-    capability = "DisplayYesNo"
-
-    # Create an agent that can be accessed at AGENT_PATH
-    agent = Agent(bus, AGENT_PATH)
-
-    # Register the agent
-    obj = bus.get_object(BUS_NAME, "/org/bluez")
-    manager = dbus.Interface(obj, "org.bluez.AgentManager1")
-    manager.RegisterAgent(AGENT_PATH, capability)
-    print("Agent registered")
-    manager.RequestDefaultAgent(AGENT_PATH)
-
-    # Create a mainloop for aync calls
-    mainloop = GObject.MainLoop()
-    mainloop.run()
+    runningAgent = RunningAgent()
+    print("got here")
+    try:
+        while True:
+            pass
+    except:
+        runningAgent.quit()
+        raise

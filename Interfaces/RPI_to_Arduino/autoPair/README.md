@@ -27,9 +27,17 @@ This suggestst that `simple-agent` can be adapted for automatic pairing.
 
 ## Notes
 ### GUI compatibility
-When using the python agent, there is still a GUI pairing request on the screen. E.g. 'Do you want to pair with this device (cancel) (yes)'.
+When using the python agent (or even bluetoothctl), there is still a GUI pairing request on the screen. E.g. 'Do you want to pair with this device (cancel) (yes)'.
 - By doing **nothing** then the python agent handles the request successfully and the pairing works (although this message isn't dismissed)
 - By **accepting** this pairing request then the device gets paired - this python script to supposed to remove this human interaction
 - By **declining** this pairing request then the device is paired by the python script and (assuming responding to the GUI is slower than the script) then immediately unpaired.
+
+### Bluetooth Error 11 Resource temporarily unavailable
+I started getting this error during testing. I reverted back to 3ffa296fe0c3c8eb63dc4a85a5247ccc3cb1ce5e (when everything was working) and still got the error so it seemed to be something to do with the PI.
+After doing some basic checks (is the arduino paired?) I still got the error.
+I reflashed the raspberry pi with a clean image and the same error comes up.
+After reveting to 3ffa296fe0c3c8eb63dc4a85a5247ccc3cb1ce5e again, everything works.
+Created a branch to fix this: SocketBlocking
+
 
 **Don't click cancel on the GUI pairing request**

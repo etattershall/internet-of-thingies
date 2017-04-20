@@ -12,6 +12,7 @@ from time import sleep
 import bluetooth.btcommon
 import subprocess
 
+
 def getArduinoDestination():
     '''Returns the destination for an arduino'''
     print("Scanning for arduinos")
@@ -30,23 +31,24 @@ def connectWorks(destination):
     '''
     print('Attempting to connect to device at ' + destination)
     try:
-        socket = utils.connect(destination)
+        utils.connect(destination)
     except bluetooth.btcommon.BluetoothError as e:
         return False
     else:
         return True
 
+
 def run():
     """Runs the test"""
     destination = getArduinoDestination()
     if connectWorks(destination):
-        # If you thnk the device is already paired, there 
+        # If you thnk the device is already paired, there
         # could be a rogue agent still running (and accepting)
         # the connection request, to check what agents are already
         # running run:
         # ps -x | grep autoPair.py | grep -v "grep"
         raise Exception("Unpair the device before this test!")
-                        
+
         return
     else:
         print("The device isn't paired, starting the agent background script")
@@ -65,7 +67,7 @@ def run():
     finally:
         # End the deamon
         p.kill()
-        
+
 
 if __name__ == "__main__":
     run()

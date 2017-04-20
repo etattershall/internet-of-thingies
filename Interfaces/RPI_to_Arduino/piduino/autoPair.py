@@ -1,6 +1,47 @@
 #!/usr/bin/python
 
 '''
+A script to handle pairing with devices from the PI without manual intevention.
+
+It registers a dbus bluetooth agent and then sits in a GObject mainloop.
+When a device attempts to authenticate its key with the RPI, the agent
+uses the key in secret.py to pair with the device.
+
+
+
+
+Because of this mainloop, this code blocks while waiting for a pairing attempt.
+
+- It could be included in a thread (see http://stackoverflow.com/questions/28465611/python-dbusgmainloop-inside-thread-and-try-and-catch-block)
+but then all the other code would also need to be included in a thread.
+- Multiprocessing may also work
+
+In any case, once the main script (what is utils.py at the moment) settles on a
+threading / multiprocessing / other method, this code can be implemented into
+that.
+
+
+
+Usage:
+For the moment, either run this script in a separate terminal with:
+    python autoPair.py
+
+Or call it before initiating a connection with an Arduino:
+    import subprocess
+    from time import sleep
+    try:
+        p = subprocess.Popen(["python", "piduino/autoPair.py"])
+        sleep(1)  # wait for it to start
+        # Connect to an arduino here.
+    except:
+        raise
+    finally:
+        p.kill()  # kill it (even in an Exception)
+
+
+
+
+
 Adapted from:
 https://github.com/r10r/bluez/blob/master/test/simple-agent
 '''

@@ -10,7 +10,7 @@ def test_chosen_packet_constants_are_not_forbidden():
 def test_valid_packet_passes():
     source = '00:00:00:00:00:00'
     destination = '11:11:11:11:11:11'
-    payload = 'Hello World!'
+    payload = 'Hello World! '
     packaged_message = (Packet.START + source +
                         Packet.DIVIDE + destination +
                         Packet.DIVIDE + payload +

@@ -269,7 +269,10 @@ class RunningAgent():
 
         # Create a mainloop for aync calls
         self.mainloop = GObject.MainLoop()
-        self.mainloop.run()
+        try:
+            self.mainloop.run()
+        finally:
+            self.close()
 
     def close(self):
         self.mainloop.quit()
@@ -277,10 +280,3 @@ class RunningAgent():
 
 if __name__ == '__main__':
     runningAgent = RunningAgent()
-    print("got here")
-    try:
-        while True:
-            pass
-    except:
-        runningAgent.quit()
-        raise

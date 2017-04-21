@@ -38,7 +38,7 @@ def run():
 
     print('Searching for Arduinos...')
 
-    destinations = utils.scan('H-C-2010-06-01')
+    destinations = utils.scan('SCD_ARDUINO')
     if len(destinations) == 0:
         print('No Arduinos found!')
     else:

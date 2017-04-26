@@ -12,37 +12,75 @@ import bluetooth._bluetooth as _bt
 # characters can't be used as delimiters or bookends (although they
 # can still be used in normal message payloads)
 
-class Packet:
+    
+class Format:
     START = '<'
     DIVIDE = '#'
     END = '>'
+    ESCAPE = '!!'
+    FORBIDDEN = ":\.^[]{}()?*+|$" 
     COMPONENTS = 3
+    def __init__(self):
+        pass
 
+    def check_constants(self):
+        constants = [self.START, self.DIVIDE, self.END, self.ESCAPE]
+        if len(set(constants) & set(self.FORBIDDEN)) > 0:
+            raise Exception("Forbidden character in constant; you can't use " +
+                        "any of " + self.FORBIDDEN + " in the START, " +
+                        "END or DIVIDE strings")
+        else:
+            return True
+    
+    def contains_packet(self, data):
+        """
+        Returns True if data contains a single message, and False otherwise.
+        """
+        regex = ("(?<!" + self.ESCAPE + ")" + self.START + "(.+)"
+                + ("(?<!" + self.ESCAPE + ")" + self.DIVIDE + "(.+)")*(self.COMPONENTS - 1)
+                + "(?<!" + self.ESCAPE + ")" + self.END)
+                
+        packets = re.findall(re.compile(regex), data.decode(errors="ignore"))
+        
+        if len(packets) == 1:
+            return True
+        elif len(packets) > 1:
+            #warnings.warn("Multiple messages found. Only the first will be used.", RuntimeWarning)
+            return True
+        else:
+            return False
 
+    def escape(self, data):
+        reserved = [self.START, self.DIVIDE, self.END] 
+        return data
+
+    def unescape(self, data):
+        """
+        Takes a message payload e.g.
+        Hello!!>World
+        And returns:
+        Hello>World
+        """
+        reserved = [self.START, self.DIVIDE, self.END, self.ESCAPE]
+        for char in reserved:
+            data = re.sub(self.ESCAPE + char, char, data)
+        return data
                        
-def check_constants():
-    forbidden = ":\.^[]{}()?*+|$" 
-    constants = [Packet.START, Packet.DIVIDE, Packet.END]
-    if len(set(constants) & set(forbidden)) > 0:
-        raise Exception("Forbidden character in constant; you can't use " +
-                    "any of " + forbidden + " in the START, " +
-                    "END or DIVIDE strings")
-    else:
-        return True
+
 
 def check_valid(data):
     """
     Returns True if data contains a single message, and False otherwise.
     """
-    regex = (Packet.START + ".+" 
-            + (Packet.DIVIDE + ".+")*(Packet.COMPONENTS - 1) 
-            + Packet.END)
+    regex = (Format.START + ".+" 
+            + (Format.DIVIDE + ".+")*(Format.COMPONENTS - 1) 
+            + Format.END)
             
-    packaged_messages = re.findall(regex, data.decode(errors="ignore"))
+    packets = re.findall(re.compile(regex), data.decode(errors="ignore"))
     
-    if len(packaged_messages) == 1:
+    if len(packets) == 1:
         return True
-    elif len(packaged_messages) > 1:
+    elif len(packets) > 1:
         #warnings.warn("Multiple messages found. Only the first will be used.", RuntimeWarning)
         return True
     else:
@@ -59,29 +97,28 @@ class Message():
         return obj
 
     @classmethod
-    def from_packaged(cls, packaged_message):
+    def from_packet(cls, packet):
         obj = cls()
-        regex = (Packet.START + "(.+)"
-                + (Packet.DIVIDE + "(.+)")*(Packet.COMPONENTS - 1)
-                + Packet.END)
-
-        if check_valid(packaged_message):
+        # Use negative lookbehind to ignore escaped characters
+        regex = ("(?<!" + Format.ESCAPE + ")" + Format.START + "(.+)"
+                + ("(?<!" + Format.ESCAPE + ")" + Format.DIVIDE + "(.+)")*(Format.COMPONENTS - 1)
+                + "(?<!" + Format.ESCAPE + ")" + Format.END)
+        
+        if Format().contains_packet(packet):
             # We take the first message in the packet. Note that we will ignore
             # any other valid packets contained in the string
-            obj.source, obj.destination, obj.payload = re.findall(regex, packaged_message)[0]
+            obj.source, obj.destination, obj.payload = re.findall(re.compile(regex), packet)[0]
             return obj  
         else:
             raise IOError("Not a valid message!")
         
-    def __escape(payload):
-        return payload
-
     def package(self):
-        packaged = (Packet.START + self.source
-                   + Packet.DIVIDE + self.destination
-                   + Packet.DIVIDE + self.payload
-                   + Packet.END)
-        return packaged
+        packet = (Format.START + self.source
+                   + Format.DIVIDE + self.destination
+                   + Format.DIVIDE + self.payload
+                   + Format.END)
+        return packet
+    
 
 class Device():
     def __init__(self, address, name):
@@ -151,7 +188,7 @@ class Device():
             try:
                 # Read the data in the buffer
                 data += self.sock.recv(4096)
-                if check_valid(data):
+                if Format().contains_packet(data):
                     return data
                 
             except bluetooth.BluetoothError as e:
@@ -311,7 +348,7 @@ if __name__ == "__main__":
             ready_to_read, ready_to_write, ready_with_errors = select.select(myhub.devices, [], [])
             for dev in ready_to_read:
                 incoming_packet = dev.receive()
-                incoming_message = Message.from_packaged(incoming_packet)
+                incoming_message = Message.from_packet(incoming_packet)
                 myhub.handle_message(incoming_message)
                 print(incoming_message.payload)
             

@@ -179,10 +179,6 @@ def connect(address):
     # function
     sock.settimeout(2.0)
     
-    # Set the socket as non-blocking. This means that if we call listen(),
-    # and the socket doesn't send anything, then it doesn't throw an error
-    sock.setblocking(0)
-    
     return sock
 
 def disconnect(sock):

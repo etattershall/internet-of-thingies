@@ -10,7 +10,7 @@ import bluetooth._bluetooth as _bt
 
 # Note that due to the special characters used by python's re, some
 # characters can't be used as delimiters or bookends (although they
-# can still be used in normal message payloads)
+# can still be used in normal message payloads) 
 
     
 class Format:

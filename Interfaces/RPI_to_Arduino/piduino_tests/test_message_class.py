@@ -8,7 +8,7 @@ from piduino.piduino import Format
 def test_initialise_message_from_valid_components_passes():
     source = '00:00:00:00:00:00'
     destination = '11:11:11:11:11:11'
-    payload = 'Hello World!'
+    payload = 'Hello World! '
     mymessage = Message.from_components(source, destination, payload)
     assert mymessage.source == source
     assert mymessage.destination == destination

@@ -20,4 +20,7 @@ To add entropy to the RNG:
 - `RNG.addNoiseSource(noise)` adds a noise class provided by a different library in the same repository eg 'RingOscillatorNoiseSource' or 'TransistorNoiseSource'
 - By default, the RNG library uses [Entropy's](https://sites.google.com/site/astudyofentropy/project-definition/timer-jitter-entropy-sources/entropy-library) "Harvest entropy from watchdog jitter" to add noise from differences in timing functions
 
-Without the hardware for `addNoiseSource()`, crypto_test.ino uses the other methods. Perhaps using the analoge pin as an input to `stir()` is too predictable so the sketch compares the timings of each of the methods. 
+Without the hardware for `addNoiseSource()`, crypto_test.ino uses the other methods. Perhaps using the analoge pin as an input to `stir()` is too predictable so the sketch compares the timings of each of the methods.
+
+#### Note
+The key length appears to be different each time... Turns out that the Serial.print(blah, hex) [doesn't print leading zeros](https://forum.arduino.cc/index.php?topic=38107.0)!

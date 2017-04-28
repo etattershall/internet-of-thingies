@@ -2,6 +2,7 @@
 byte key[32];
 unsigned long startMicros;
 bool analogStir = false; // a flag: stir in analogue read?
+const char hexChars[] = "0123456789ABCDEF";  // for printing hex
 
 void setup() {
     // Initialize the random number generator with the application tag
@@ -16,6 +17,8 @@ void setup() {
 
     Serial.begin(115200);
     Serial.println("Starting Up!");
+    delay(50);
+    // testPrintHexByte();
 }
 
 
@@ -39,8 +42,33 @@ void loop(){
   Serial.println("s");
   Serial.print("This is the key: "); // print the key
   for(int i = 0 ; i < sizeof(key) ; i++){
-    Serial.print(key[i], HEX);
+    printHexByte(key[i]);
+    Serial.print("|");
   }
   Serial.println("");
   analogStir = !analogStir; // toggle analogStir so the opposite happens next
+}
+
+/* prints a byte to serial in hex, *DOES* print leading 0s*/
+void printHexByte(byte toPrint){
+  // Do it this way to avoid print(,HEX) which removes 0 padding
+  byte HSN = toPrint >> 4;  // high nibble
+  byte LSN = toPrint & 0x0f;  // low nibble
+  // print hex
+  Serial.print(hexChars[HSN]);
+  Serial.print(hexChars[LSN]);
+}
+
+
+/* tests printHexByte */
+void testPrintHexByte(){
+  Serial.println(" ---- Testing Print Hex ---- ");
+  byte i = 0;
+  do {
+    printHexByte(i);
+    i ++;
+    if(i % 16 == 0){
+      Serial.println();
+    }
+  } while (i != 0);
 }

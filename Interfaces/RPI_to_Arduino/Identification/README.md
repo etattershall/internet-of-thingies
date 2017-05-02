@@ -26,3 +26,25 @@ Without the hardware for `addNoiseSource()`, generate_random_key.ino uses the ot
 
 #### Note
 The key length appears to be different each time... Turns out that the Serial.print(blah, hex) [doesn't print leading zeros](https://forum.arduino.cc/index.php?topic=38107.0)!
+
+
+## Symmetric Encryption
+
+According to [wikipedia](https://en.wikipedia.org/wiki/Transport_Layer_Security#Algorithm), the standard stream cipher is ChaChaPoly. This is compared with AES (the standard block cipher).
+
+Their [tests](https://rweather.github.io/arduinolibs/crypto.html) are for the arduino uno at 16MHz - we should get the same results.
+
+### My Results for ChaChaPoly
+```
+State Size ... 221
+
+Test Vectors:
+ChaChaPoly #1 ... Passed
+ChaChaPoly #2 ... Passed
+
+Performance Tests:
+ChaChaPoly #1 SetKey ... 978.01us per operation, 1022.48 per second
+ChaChaPoly #1 Encrypt ... 43.00us per byte, 23254.19 bytes per second
+ChaChaPoly #1 Decrypt ... 43.00us per byte, 23258.22 bytes per second
+ChaChaPoly #1 AddAuthData ... 27.47us per byte, 36396.89 bytes per second
+```

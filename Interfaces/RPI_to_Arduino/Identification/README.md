@@ -9,7 +9,9 @@
 
 ## Random Numbers
 
-The [Arduino Crypto](https://rweather.github.io/arduinolibs/crypto.html) library seems to be the established library for cryptography [[1](http://playground.arduino.cc/Main/LibraryList#Cryptography)]. It includes a method from [Entropy](https://sites.google.com/site/astudyofentropy/project-definition/timer-jitter-entropy-sources/entropy-library) which is supposed to be better than sampling an unconnected analogue pin.
+The generate_random_key.ino sketch gives an example implementation.
+
+The [Arduino Crypto](https://rweather.github.io/arduinolibs/crypto.html) library seems to be the established library for cryptography [[1](http://playground.arduino.cc/Main/LibraryList#Cryptography)]. It includes random number generator method from [Entropy](https://sites.google.com/site/astudyofentropy/project-definition/timer-jitter-entropy-sources/entropy-library) which is supposed to be better than sampling an unconnected analogue pin.
 
 ### Arduino Crypto
 See the [github page](https://github.com/rweather/arduinolibs) for the library. To install the library, I created a .zip (see Crypto.zip) file from the 'Crypto' folder and loaded it into the Arduino IDE through 'Sketch' > 'Include library' > 'Add .ZIP library'
@@ -20,7 +22,7 @@ To add entropy to the RNG:
 - `RNG.addNoiseSource(noise)` adds a noise class provided by a different library in the same repository eg 'RingOscillatorNoiseSource' or 'TransistorNoiseSource'
 - By default, the RNG library uses [Entropy's](https://sites.google.com/site/astudyofentropy/project-definition/timer-jitter-entropy-sources/entropy-library) "Harvest entropy from watchdog jitter" to add noise from differences in timing functions
 
-Without the hardware for `addNoiseSource()`, crypto_test.ino uses the other methods. Perhaps using the analoge pin as an input to `stir()` is too predictable so the sketch compares the timings of each of the methods.
+Without the hardware for `addNoiseSource()`, generate_random_key.ino uses the other methods. Perhaps using the analoge pin as an input to `stir()` is too predictable so the sketch compares the timings of each of the methods.
 
 #### Note
 The key length appears to be different each time... Turns out that the Serial.print(blah, hex) [doesn't print leading zeros](https://forum.arduino.cc/index.php?topic=38107.0)!

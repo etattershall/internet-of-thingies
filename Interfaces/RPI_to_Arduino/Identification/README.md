@@ -13,7 +13,7 @@ The generate_random_key.ino sketch gives an example implementation.
 
 The [Arduino Crypto](https://rweather.github.io/arduinolibs/crypto.html) library seems to be the established library for cryptography [[1](http://playground.arduino.cc/Main/LibraryList#Cryptography)]. It includes random number generator method from [Entropy](https://sites.google.com/site/astudyofentropy/project-definition/timer-jitter-entropy-sources/entropy-library) which is supposed to be better than sampling an unconnected analogue pin.
 
-### Arduino Crypto
+### RN Using Arduino Crypto
 See the [github page](https://github.com/rweather/arduinolibs) for the library. To install the library, I created a .zip (see Crypto.zip) file from the 'Crypto' folder and loaded it into the Arduino IDE through 'Sketch' > 'Include library' > 'Add .ZIP library'
 
 To add entropy to the RNG:
@@ -24,13 +24,13 @@ To add entropy to the RNG:
 
 Without the hardware for `addNoiseSource()`, generate_random_key.ino uses the other methods. Perhaps using the analoge pin as an input to `stir()` is too predictable so the sketch compares the timings of each of the methods.
 
-#### Note
+#### Serial Print Hex Doesn't Work
 The key length appears to be different each time... Turns out that the Serial.print(blah, hex) [doesn't print leading zeros](https://forum.arduino.cc/index.php?topic=38107.0)!
 
 
 ## Symmetric Encryption
 
-According to [wikipedia](https://en.wikipedia.org/wiki/Transport_Layer_Security#Algorithm), the standard stream cipher is ChaChaPoly. This is compared with AES (the standard block cipher).
+According to [wikipedia](https://en.wikipedia.org/wiki/Transport_Layer_Security#Algorithm), the standard stream cipher is ChaChaPoly. This is compared with AES - the standard block cipher.
 
 Their [tests](https://rweather.github.io/arduinolibs/crypto.html) are for the arduino uno at 16MHz - we should get the same results.
 
@@ -48,3 +48,6 @@ ChaChaPoly #1 Encrypt ... 43.00us per byte, 23254.19 bytes per second
 ChaChaPoly #1 Decrypt ... 43.00us per byte, 23258.22 bytes per second
 ChaChaPoly #1 AddAuthData ... 27.47us per byte, 36396.89 bytes per second
 ```
+
+### Why not using ChaChaPoly
+While there is a python library to implement the ChaCha20-Poly1305 [see here](https://github.com/AntonKueltz/ChaCha20Poly1305/graphs/contributors), I couldn't get it to produce the same output (it sets different key sizes and encrypts the tag before using it). It is also a very small library (13 commits, not on pip, 2 watchers) so may not have been implemented correctly.

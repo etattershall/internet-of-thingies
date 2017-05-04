@@ -32,9 +32,10 @@ and iv to encrypt a given plaintext and authdata
 
 #define MAX_PLAINTEXT_LEN 265
 
-byte key[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-              201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
-              211, 212, 213, 214, 215, 216};
+byte key[] = {  1,   2,   3,   4,   5,   6,   7,   8,
+                9,  10,  11,  12,  13,  14,  15,  16,
+              201, 202, 203, 204, 205, 206, 207, 208,
+              209, 210, 211, 212, 213, 214, 215, 216};
 byte plaintext[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -53,6 +54,32 @@ byte plaintext[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 //                     0x8A, 0xF2, 0x99, 0x2E, 0x54, 0xAE, 0xB4, 0xD9};
 byte iv[] = {101, 102, 103, 104, 105, 106, 107, 108};
 byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
+
+
+// According to the specification (https://tools.ietf.org/html/rfc7539)
+// the counter and the iv are used to set the inital state for each block
+// that this is used on.
+
+// cccccccc  cccccccc  cccccccc  cccccccc
+// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+// bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
+
+// This shows how the inital state is set up for each 64 byte block
+// c represents a constant that is always the same for all implementations
+// k is the key (32 bytes)
+// b is the counter, n is the nonce == iv
+
+// For each new block, increment the counter.
+// NOTE: This implementation (Arduino) uses any size key (it sets the
+//       rest to 0) and truncates at 32 bytes.
+// NOTE: This implementation uses either 8 or 12 byte nonces. So
+//       if 8 bytes are used then the first 4 bytes are set to 0. The counter
+//       can be 4 or 8 bytes and it is written last from 48th byte up to its
+//       length. So if counter = 4 and nonce = 8 then there are lots of 0s!
+
+
+
 
 ChaCha chacha;
 

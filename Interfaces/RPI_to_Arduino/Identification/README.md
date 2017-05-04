@@ -51,3 +51,5 @@ ChaChaPoly #1 AddAuthData ... 27.47us per byte, 36396.89 bytes per second
 
 ### Why not using ChaChaPoly
 While there is a python library to implement the ChaCha20-Poly1305 [see here](https://github.com/AntonKueltz/ChaCha20Poly1305/graphs/contributors), I couldn't get it to produce the same output (it sets different key sizes and encrypts the tag before using it). It is also a very small library (13 commits, not on pip, 2 watchers) so may not have been implemented correctly.
+
+### Using only ChaCha

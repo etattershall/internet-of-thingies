@@ -31,21 +31,38 @@ and iv to encrypt a given plaintext and authdata
 #include <avr/pgmspace.h>
 
 #define MAX_PLAINTEXT_LEN 265
+#define KEY_SIZE 32
+#define NONCE_SIZE 8
+#define COUNTER_SIZE 8
 
-byte key[] = {  1,   2,   3,   4,   5,   6,   7,   8,
-                9,  10,  11,  12,  13,  14,  15,  16,
-              201, 202, 203, 204, 205, 206, 207, 208,
-              209, 210, 211, 212, 213, 214, 215, 216};
-byte plaintext[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-byte iv[] = {101, 102, 103, 104, 105, 106, 107, 108};
-byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
+
+// byte key[] = {  1,   2,   3,   4,   5,   6,   7,   8,
+//                 9,  10,  11,  12,  13,  14,  15,  16,
+//               201, 202, 203, 204, 205, 206, 207, 208,
+//               209, 210, 211, 212, 213, 214, 215, 216};
+// byte plaintext[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+//                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+// byte iv[] = {101, 102, 103, 104, 105, 106, 107, 108};
+// byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
+
+byte key[] = {49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54,
+              55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50};
+byte ciphertext[] = {77, 160, 7, 47, 202, 128, 146, 215, 73, 204, 48, 16, 213,
+                     66, 221, 198, 200, 158, 19, 21, 133, 51, 73, 7, 221, 17,
+                     153, 242, 1, 147, 79, 14, 149, 204, 162, 198, 107, 169,
+                     76, 54, 82, 26, 193, 134, 86, 111, 35, 195, 160, 181};
+byte plaintext[] = {84, 104, 105, 115, 32, 105, 115, 32, 97, 32, 116, 101, 115,
+                    116, 32, 115, 116, 114, 105, 110, 103, 44, 32, 101, 110,
+                    99, 114, 121, 112, 116, 101, 100, 32, 117, 115, 105, 110,
+                    103, 32, 67, 104, 97, 67, 104, 97, 32, 112, 111, 108, 121};
+byte iv[] = {48, 49, 50, 51, 52, 53, 54, 55};
+byte counter[] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 
 // According to the specification (https://tools.ietf.org/html/rfc7539)
@@ -76,54 +93,66 @@ byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
 // Define the global ChaCha cipher class to use.
 ChaCha chacha;
 
-
 /*
- * Takes a pointer to the ChaChaPoly cipher, a pointer to outBuffer.
- * It writes the encrypted data to the outBuffer.
+ * Sets up the ChaCha cipher according to the parameters
+ * Params:
+ * cipher = pointer to ChaCha cipher
+ * k = pointer to a byte array containing the key
+ * nonce = pointer to a byte array containing the nonce
+ * count = pointer to a byte array containing the counter
+ * note these should all be of sizes defined in the SIZE macros
  */
-void encrypt(ChaCha *cipher, byte *outBuffer){
+void setup_chacha(ChaCha *cipher, byte *k, byte *nonce, byte *count){
   // Set the key, IV and counter
   cipher->clear();
-  cipher->setKey(key, sizeof(key));
-  cipher->setIV(iv, sizeof(iv));
-  cipher->setCounter(counter, sizeof(counter));
-
-  // Write the encrypted data to the buffer
-  cipher->encrypt(outBuffer, plaintext, sizeof(plaintext));
+  cipher->setKey(k, KEY_SIZE);
+  cipher->setIV(nonce, NONCE_SIZE);
+  cipher->setCounter(count, COUNTER_SIZE);
 }
+
+
+// cipher->encrypt(outBuffer, plaintext, sizeof(plaintext));
+// cipher->decrypt(outBuffer, ciphertext, sizeOfCipher);
 
 void setup()
 {
     Serial.begin(9600);
 
-    // Initalise a buffer to store to encrypted data
-    byte encryptedOut[MAX_PLAINTEXT_LEN];
-
-    // Encrypt the data into the buffer
-    encrypt(&chacha, encryptedOut);
-
+    // Print the initial state
     Serial.println("TEST ENCRYPTION:");
-
-    Serial.println("In Key:");
+    Serial.println("Hardcoded Key:");
     printArray(key, sizeof(key)); Serial.println();
     Serial.println();
-
-    Serial.println("In Plaintext: ");
+    Serial.println("Hardcoded Plaintext: ");
     printArray(plaintext, sizeof(plaintext)); Serial.println();
     Serial.println();
-
-    Serial.println("In Counter: ");
+    Serial.println("Hardcoded Ciphertext: ");
+    printArray(ciphertext, sizeof(ciphertext)); Serial.println();
+    Serial.println();
+    Serial.println("Hardcoded Counter: ");
     printArray(counter, sizeof(counter)); Serial.println();
     Serial.println();
-
-    Serial.println("In IV: ");
+    Serial.println("Hardcoded IV: ");
     printArray(iv, sizeof(iv)); Serial.println();
     Serial.println();
 
+    // Encrypt the plaintext into a buffer
+    setup_chacha(&chacha, key, iv, counter);
+    byte outBuffer[MAX_PLAINTEXT_LEN];
+    chacha.encrypt(outBuffer, plaintext, sizeof(plaintext));
     Serial.println("Encrypted Data: ");
     // Print sizeof plaintext (as encryptedOut is of length MAX_PLAINTEXT_LEN
     // rather than length of the plaintext - there are probably 0s at the end!)
-    printArray(encryptedOut, sizeof(plaintext)); Serial.println();
+    printArray(outBuffer, sizeof(plaintext)); Serial.println();
+    Serial.println();
+
+    memset(outBuffer, 0, MAX_PLAINTEXT_LEN); // Reset the buffer
+
+    // Decrypt the cipher into a the same buffer
+    setup_chacha(&chacha, key, iv, counter);
+    chacha.encrypt(outBuffer, ciphertext, sizeof(plaintext));
+    Serial.println("Decrypted Data: ");
+    printArray(outBuffer, sizeof(plaintext)); Serial.println();
     Serial.println();
 }
 

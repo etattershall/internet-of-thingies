@@ -44,14 +44,6 @@ byte plaintext[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-// byte ciphertext  = {0x2A, 0x7E, 0x73, 0xC2, 0x2A, 0xE5, 0xCF, 0x4E,
-//                     0x21, 0x75, 0xB1, 0x26, 0x38, 0x3F, 0x60, 0x84,
-//                     0x11, 0x25, 0xFC, 0xAD, 0xFD, 0x16, 0x54, 0xF2,
-//                     0xD7, 0x8C, 0x5D, 0x49, 0x8D, 0x96, 0xBE, 0x15,
-//                     0xC9, 0x00, 0x12, 0x09, 0x14, 0x43, 0x2D, 0x6D,
-//                     0x64, 0x33, 0x88, 0xA6, 0x16, 0x39, 0x86, 0xFD,
-//                     0xD8, 0x85, 0x4D, 0x76, 0x42, 0xEC, 0x0A, 0x0C,
-//                     0x8A, 0xF2, 0x99, 0x2E, 0x54, 0xAE, 0xB4, 0xD9};
 byte iv[] = {101, 102, 103, 104, 105, 106, 107, 108};
 byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
 
@@ -70,7 +62,8 @@ byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
 // k is the key (32 bytes)
 // b is the counter, n is the nonce == iv
 
-// For each new block, increment the counter.
+// For each new block, the implementation increments the counter so that a
+// different seed is used.
 // NOTE: This implementation (Arduino) uses any size key (it sets the
 //       rest to 0) and truncates at 32 bytes.
 // NOTE: This implementation uses either 8 or 12 byte nonces. So
@@ -80,23 +73,20 @@ byte counter[] = {109, 110, 111, 112, 113, 114, 115, 116};
 
 
 
-
+// Define the global ChaCha cipher class to use.
 ChaCha chacha;
 
-const char hexChars[] = "0123456789ABCDEF";
 
 /*
- * Takes a pointer to the ChaChaPoly cipher, a pointer to outBuffer and a
- * pointer to the t buffer. It writes the encrypted data to the outBuffer
- * and the computed tag to the t buffer.
+ * Takes a pointer to the ChaChaPoly cipher, a pointer to outBuffer.
+ * It writes the encrypted data to the outBuffer.
  */
-void test_encrypt(ChaCha *cipher, byte *outBuffer, uint8_t *t){
+void encrypt(ChaCha *cipher, byte *outBuffer){
   // Set the key, IV and counter
   cipher->clear();
   cipher->setKey(key, sizeof(key));
   cipher->setIV(iv, sizeof(iv));
   cipher->setCounter(counter, sizeof(counter));
-
 
   // Write the encrypted data to the buffer
   cipher->encrypt(outBuffer, plaintext, sizeof(plaintext));
@@ -108,11 +98,9 @@ void setup()
 
     // Initalise a buffer to store to encrypted data
     byte encryptedOut[MAX_PLAINTEXT_LEN];
-    // Initialize a buffer to store the computed tag
-    uint8_t tag[16];
 
     // Encrypt the data into the buffer
-    test_encrypt(&chacha, encryptedOut, tag);
+    encrypt(&chacha, encryptedOut);
 
     Serial.println("TEST ENCRYPTION:");
 
@@ -133,6 +121,8 @@ void setup()
     Serial.println();
 
     Serial.println("Encrypted Data: ");
+    // Print sizeof plaintext (as encryptedOut is of length MAX_PLAINTEXT_LEN
+    // rather than length of the plaintext - there are probably 0s at the end!)
     printArray(encryptedOut, sizeof(plaintext)); Serial.println();
     Serial.println();
 }
@@ -141,6 +131,11 @@ void loop()
 {
 }
 
+
+// From here onward, there is just code to print clean hex characters
+
+// Define an array mapping hex character to index
+const char hexChars[] = "0123456789ABCDEF";
 
 /* takes a pointer to an array and prints it as hex */
 void printArray(byte pointerToArray[], int sizeOfArray){

@@ -30,11 +30,13 @@ The key length appears to be different each time... Turns out that the Serial.pr
 
 ## Symmetric Encryption
 
-According to [wikipedia](https://en.wikipedia.org/wiki/Transport_Layer_Security#Algorithm), the standard stream cipher is ChaChaPoly. This is compared with AES - the standard block cipher.
+There are two aspects to symetric encryption: obscuring the message and ensuring it hasn't been tampered with. A cipher is used to obscure the message and a MAC (message authenticaion code) ensures no tampering.
+
+According to [wikipedia](https://en.wikipedia.org/wiki/Transport_Layer_Security#Algorithm), it is common to use the stream cipher ChaCha20 and poly-1305 as a MAC. Various sources describe it as an efficient cipher that will work on lower powered devices. Timing results are recorded using **test_ChaChaPoly** which is a test from an Arduino implementation (Arduino Crypto again).
 
 Their [tests](https://rweather.github.io/arduinolibs/crypto.html) are for the arduino uno at 16MHz - we should get the same results.
 
-### My Results for ChaChaPoly
+### ChaChaPoly timings
 ```
 State Size ... 221
 
@@ -50,6 +52,11 @@ ChaChaPoly #1 AddAuthData ... 27.47us per byte, 36396.89 bytes per second
 ```
 
 ### Why not using ChaChaPoly
-While there is a python library to implement the ChaCha20-Poly1305 [see here](https://github.com/AntonKueltz/ChaCha20Poly1305/graphs/contributors), I couldn't get it to produce the same output (it sets different key sizes and encrypts the tag before using it). It is also a very small library (13 commits, not on pip, 2 watchers) so may not have been implemented correctly.
+While there is a python library to implement the ChaCha20-Poly1305 ([see here](https://github.com/AntonKueltz/ChaCha20Poly1305/graphs/contributors)), I couldn't get it to produce the same output (it sets different key sizes and encrypts the tag before using it). It is also a very small library (13 commits, not on pip, 2 watchers) so may not have been implemented correctly.
 
 ### Using only ChaCha
+There are lots of implementations of ChaCha20 alone. One of the largest, [pycryptodome](https://github.com/Legrandin/pycryptodome), is used to get the same output as the Arduino's implementation of ChaCha20. **encrypt_chacha** cotains an Arduino sketch and a python script which encrypt data using the ChaCha20 cipher. There is a test script that confirms that the outputs are the same.
+
+ChaCha20 as a cipher ensures symetric encryption but without a MAC (eg Poly-1305), there is no guaruntee that the message hasn't been changed.
+
+There is also the issue that the symetric key needs to be shared between the Arduino and the Raspberry Pi.

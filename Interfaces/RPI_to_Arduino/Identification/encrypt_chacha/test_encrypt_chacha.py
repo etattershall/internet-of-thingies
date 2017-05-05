@@ -1,4 +1,5 @@
 import pytest
+import struct
 
 from Crypto.Util._raw_api import expect_byte_string
 import encrypt_chacha
@@ -11,41 +12,44 @@ def test_convertToByteString_is_accepted_by_crypto():
     expect_byte_string(encrypt_chacha.convertToByteString(testArray))
 
 
-def test_init_converts_everything():
-    "__init__ should convert the globals to bytestrings from arrays"
-    encrypt_chacha.__init__()
-    for a in (encrypt_chacha.key, encrypt_chacha.plaintext, encrypt_chacha.iv):
-        expect_byte_string(a)
+def test_convertCounter_offset_is_0():
+    """ChaCha20.seek() takes the output from convertCounter and uses the last
+    6 bits (mod 64) to use as an offset within each block rather than setting
+    the counter. This tests that convertCounter always makes this offset 0."""
+    testArrays = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 1],
+                  [0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 1, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 1, 1], [0, 255, 0, 0, 0, 0, 0, 255]]
+
+    for test in testArrays:
+        # For all the test cases, check that the output is divisible by 64
+        assert encrypt_chacha.convertCounter(test) % 64 == 0
 
 
-def test_convertToInt_works_with_0():
-    "convertToInt should produce the correct int"
-    testArray = [0]
-    assert encrypt_chacha.convertToInt(testArray) == 0
-
-
-def test_convertToInt_works_with_1():
-    "convertToInt should produce the correct int"
-    testArray = [1]
-    assert encrypt_chacha.convertToInt(testArray) == 1
-
-
-def test_convertToInt_works_with_256():
-    "convertToInt should produce the correct int"
-    testArray = [1, 0]
-    assert encrypt_chacha.convertToInt(testArray) == 256
-
-
-def test_convertToInt_works_with_257():
-    "convertToInt should produce the correct int"
-    testArray = [1, 1]
-    assert encrypt_chacha.convertToInt(testArray) == 257
-
-
-def test_convertToInt_works_with_300():
-    "convertToInt should produce the correct int"
-    testArray = [1, 44]
-    assert encrypt_chacha.convertToInt(testArray) == 300
+def test_convertCounter_blocks():
+    """This splits the output from convertCounter into block_high and block_low
+    in the same way that ChaCha20.seek() does. It tests that when those
+    32bit integers are packed into a byte array by
+    _raw_chacha20_lib.chacha20_seek(), the bytes are ordered in the correct way
+    as the input. This could be an issue because of the endianness of the
+    processor.
+    """
+    testInputs = [
+        ([0, 0, 0, 0, 0, 0, 0, 0], b"\x00\x00\x00\x00", b"\x00\x00\x00\x00"),
+        ([0, 1, 0, 0, 0, 0, 0, 0], b"\x00\x01\x00\x00", b"\x00\x00\x00\x00"),
+        ([0, 0, 0, 0, 0, 0, 0, 1], b"\x00\x00\x00\x00", b"\x00\x00\x00\x01"),
+        ([0, 0, 0, 4, 0, 0, 0, 2], b"\x00\x00\x00\x04", b"\x00\x00\x00\x02")
+    ]
+    for test, low, high in testInputs:
+        # Remove offset
+        position = encrypt_chacha.convertCounter(test) >> 6
+        block_low = position & 0xFFFFFFFF
+        block_high = position >> 32
+        # _raw_chacha20_lib.chacha20_seek() writes these inputs as little
+        # endian regardless of processor. Check that this writing is in the
+        # expected way here regardless of processor.
+        # TODO: It would be good to run this on a big endian machine.
+        assert struct.pack("<i", block_low) == low
+        assert struct.pack("<i", block_high) == high
 
 
 def test_encrypt_works_with_plaintext_key_nonce():
@@ -94,25 +98,24 @@ def test_encrypt_works_with_plaintext_key_nonce_counter():
                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     iv = [101, 102, 103, 104, 105, 106, 107, 108]
-    counter = [109, 110, 111, 112, 113, 114, 115, 0]
-    arduinoOuput = [0x68, 0x9C, 0x54, 0x6E, 0x67, 0x92, 0xF7, 0x77, 0x45, 0x9E,
-                    0x1D, 0xC5, 0xD3, 0x71, 0x89, 0x8A, 0x79, 0x60, 0xE1, 0xA9,
-                    0x60, 0xB5, 0xBC, 0x5C, 0xB4, 0x47, 0xA6, 0x3A, 0x87, 0xBC,
-                    0x71, 0x56, 0x80, 0x27, 0xFD, 0x7E, 0xF4, 0x40, 0xBA, 0xE8,
-                    0x53, 0xB4, 0x60, 0x5C, 0xDF, 0x1C, 0x2B, 0x2F, 0x03, 0x6F,
-                    0xB5, 0xD2, 0xEE, 0xCC, 0x54, 0x11, 0xC0, 0x44, 0x3A, 0x50,
-                    0xEC, 0x74, 0x34, 0x95]
-    # arduinoOuput = [0x2A, 0x7E, 0x73, 0xC2, 0x2A, 0xE5, 0xCF, 0x4E, 0x21, 0x75,
-    #                 0xB1, 0x26, 0x38, 0x3F, 0x60, 0x84, 0x11, 0x25, 0xFC, 0xAD,
-    #                 0xFD, 0x16, 0x54, 0xF2, 0xD7, 0x8C, 0x5D, 0x49, 0x8D, 0x96,
-    #                 0xBE, 0x15, 0xC9, 0x00, 0x12, 0x09, 0x14, 0x43, 0x2D, 0x6D,
-    #                 0x64, 0x33, 0x88, 0xA6, 0x16, 0x39, 0x86, 0xFD, 0xD8, 0x85,
-    #                 0x4D, 0x76, 0x42, 0xEC, 0x0A, 0x0C, 0x8A, 0xF2, 0x99, 0x2E,
-    #                 0x54, 0xAE, 0xB4, 0xD9]
+    counter = [109, 110, 111, 112, 113, 114, 115, 116]
+    arduinoOuput = [0x2A, 0x7E, 0x73, 0xC2, 0x2A, 0xE5, 0xCF, 0x4E, 0x21, 0x75,
+                    0xB1, 0x26, 0x38, 0x3F, 0x60, 0x84, 0x11, 0x25, 0xFC, 0xAD,
+                    0xFD, 0x16, 0x54, 0xF2, 0xD7, 0x8C, 0x5D, 0x49, 0x8D, 0x96,
+                    0xBE, 0x15, 0xC9, 0x00, 0x12, 0x09, 0x14, 0x43, 0x2D, 0x6D,
+                    0x64, 0x33, 0x88, 0xA6, 0x16, 0x39, 0x86, 0xFD, 0xD8, 0x85,
+                    0x4D, 0x76, 0x42, 0xEC, 0x0A, 0x0C, 0x8A, 0xF2, 0x99, 0x2E,
+                    0x54, 0xAE, 0xB4, 0xD9]
+
+    # Convert everything to a byte array, the arrays above are deliberately
+    # pasted directly from arduino code to prove that the two ciphers take the
+    # same input.
     key = encrypt_chacha.convertToByteString(key)
     plaintext = encrypt_chacha.convertToByteString(plaintext)
     iv = encrypt_chacha.convertToByteString(iv)
-    counter = encrypt_chacha.convertToInt(counter) // 256  # TODO: THIS IS IN BYTES?
+    counter = encrypt_chacha.convertCounter(counter)
     arduinoOuput = encrypt_chacha.convertToByteString(arduinoOuput)
+
+    # Check outputs are the same between the two ciphers
     assert arduinoOuput == encrypt_chacha.encrypt(plaintext, key, iv,
                                                   c=counter)

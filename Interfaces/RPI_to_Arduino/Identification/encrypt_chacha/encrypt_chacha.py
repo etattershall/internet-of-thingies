@@ -1,43 +1,11 @@
 from Crypto.Cipher import ChaCha20
 import array
-
-key = [1,   2,   3,   4,   5,   6,   7,   8,
-       9,   10,  11,  12,  13,  14,  15,  16,
-       201, 202, 203, 204, 205, 206, 207, 208,
-       209, 210, 211, 212, 213, 214, 215, 216]
-
-plaintext = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-iv = [101, 102, 103, 104, 105, 106, 107, 108]
-counter = [109, 110, 111, 112, 113, 114, 115, 116]
-
-
-def __init__():
-    global key, plaintext, iv
-    key = convertToByteString(key)
-    plaintext = convertToByteString(plaintext)
-    iv = convertToByteString(iv)
+import struct
 
 
 def convertToByteString(arrayOfBytes):
     "Converts an array of ints <256 to a byte array accepted by Crypto"
     return array.array("B", arrayOfBytes).tostring()
-
-
-def convertToInt(arrayOfBytes):
-    "Converts an array of bytes (bigendian) to an int"
-    output = 0
-    for byteNum in range(len(arrayOfBytes)):
-        correspondingByte = arrayOfBytes[len(arrayOfBytes) - byteNum - 1]
-        output += correspondingByte * ((2 ** 8) ** byteNum)
-    return output
 
 
 def convertCounter(arrayOfBytes):
@@ -47,8 +15,19 @@ def convertCounter(arrayOfBytes):
     This function takes an arrayOfBytes like those passed to the Arduino and
     generates that 'int'.
 
-
     """
+    assert len(arrayOfBytes) == 8
+
+    # the counter(8 bytes) is split into block_low (4 bytes) then
+    # block_high(4 bytes) internally by pycryptodome
+    # Everything is little endian here!
+    asByteString = convertToByteString(arrayOfBytes)
+    # Unpack as two little native integers. If this processor is little endian
+    # then this should not be converted in the crypto
+    # _raw_chacha20_lib.chacha20_seek().
+    # If this processer is big endian then this should be converted
+    block_low, block_high = struct.unpack("ii", asByteString)
+    return ((block_high << 32) + block_low) << 6
 
 
 def encrypt(p, k, n, c=0):
@@ -64,16 +43,15 @@ def encrypt(p, k, n, c=0):
         The nonce to use (must be length 8)
     c: int
         The inital counter to use (default 0)
+        Use convertCounter(array of bytes (ints <256)) to get this
     """
+    # Check the inputs are the correct length
+    assert len(k) == 32
+    assert len(n) == 8
+    assert c >= 0
+    # Create a cipher
     cipher = ChaCha20.new(key=k, nonce=n)
+    # Set the counter
     cipher.seek(c)
+    # Return the encrypted message
     return cipher.encrypt(p)
-
-
-if __name__ == "__main__":
-    __init__()
-    print("Without counter")
-    print(" ".join(hex(el) for el in encrypt(plaintext, key, iv, c=0)))
-    print("With counter")
-    print(" ".join(hex(el) for el in encrypt(plaintext, key, iv,
-                                             convertToInt(counter))))

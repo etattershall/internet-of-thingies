@@ -22,11 +22,11 @@ def convertCounter(arrayOfBytes):
     # block_high(4 bytes) internally by pycryptodome
     # Everything is little endian here!
     asByteString = convertToByteString(arrayOfBytes)
-    # Unpack as two little native integers. If this processor is little endian
-    # then this should not be converted in the crypto
+    # Unpack as two native unsigned longs. If this processor is little endian
+    # then this should not be converted in the crypto function
     # _raw_chacha20_lib.chacha20_seek().
     # If this processer is big endian then this should be converted
-    block_low, block_high = struct.unpack("ii", asByteString)
+    block_low, block_high = struct.unpack("LL", asByteString)
     return ((block_high << 32) + block_low) << 6
 
 

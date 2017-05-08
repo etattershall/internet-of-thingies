@@ -66,6 +66,7 @@ def test_decrypt_encrypt_equals_plaintext():
     pt, k, n = rand[0:1024], rand[1024:1056], rand[1056:1064]
     CBYTES_IN = [random.randint(0, 255) for i in range(8)]
     c = encrypt_chacha.convertCounter(CBYTES_IN)
-    e, d = encrypt_chacha.encrypt, encrypt_chacha.decrypt
-    assert d(e(pt, k, n, c), k, n, c) == pt
-    assert e(d(pt, k, n, c), k, n, c) == pt
+    cipher = encrypt_chacha.get_cipher(k, n, c)
+    ct = cipher.encrypt(pt)
+    cipher = encrypt_chacha.get_cipher(k, n, c)
+    assert pt == cipher.decrypt(ct)

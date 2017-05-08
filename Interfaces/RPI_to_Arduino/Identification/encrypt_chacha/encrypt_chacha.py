@@ -30,13 +30,22 @@ def convertCounter(arrayOfBytes):
     return ((block_high << 32) + block_low) << 6
 
 
-def encrypt(pt, k, n, c=0):
-    """Encrypts plaintext with key, nonce and counter
+def get_cipher(k, n, c=0):
+    """Sets up a chacha20 cipher object and returns it
+
+    Usage
+    -----
+    key = convertToByteString(range(0, 32))
+    nonce = convertToByteString(range(0, 8))
+    counter = convertCounter([0, 0, 0, 0, 0, 0, 0, 1])
+    cipher = get_cipher(key, nonce, counter)
+    encrypted_stuff = cipher.encrypt(b"The secret plaintext")
+
+    cipher = get_cipher(key, nonce, counter)
+    cipher.decrypt(encrypted_stuff)
 
     Params
     ------
-    pt: bytestring
-        The plaintext to encrypt
     k: bytestring
         The key to use (must be length 32)
     n: bytestring
@@ -53,32 +62,5 @@ def encrypt(pt, k, n, c=0):
     cipher = ChaCha20.new(key=k, nonce=n)
     # Set the counter
     cipher.seek(c)
-    # Return the encrypted message
-    return cipher.encrypt(pt)
-
-
-def decrypt(ct, k, n, c=0):
-    """Decrypts ciphertext with key, nonce and counter
-
-    Params
-    ------
-    ct: bytestring
-        The ciphertext to decrypt
-    k: bytestring
-        The key to use (must be length 32)
-    n: bytestring
-        The nonce to use (must be length 8)
-    c: int
-        The inital counter to use (default 0)
-        Use convertCounter(array of bytes (ints <256)) to get this
-    """
-    # Check the inputs are the correct length
-    assert len(k) == 32
-    assert len(n) == 8
-    assert c >= 0
-    # Create a cipher
-    cipher = ChaCha20.new(key=k, nonce=n)
-    # Set the counter
-    cipher.seek(c)
-    # Return the encrypted message
-    return cipher.encrypt(ct)
+    # Return the cipher
+    return cipher

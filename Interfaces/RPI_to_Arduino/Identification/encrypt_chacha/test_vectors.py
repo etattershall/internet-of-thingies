@@ -164,7 +164,8 @@ def runVector(vector):
     c = encrypt_chacha.convertCounter(vector["counter"])
     k = encrypt_chacha.convertToByteString(vector["key"])
     ct = encrypt_chacha.convertToByteString(vector["ciphertext"])
-    assert ct == encrypt_chacha.encrypt(pt, k, n, c)
+    cipher = encrypt_chacha.get_cipher(k, n, c)
+    assert ct == cipher.encrypt(pt)
 
 
 def test_official_vectors():

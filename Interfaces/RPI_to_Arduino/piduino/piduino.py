@@ -1,4 +1,7 @@
+import sys
+import subprocess
 import re
+import time
 import datetime
 import select
 import logging
@@ -7,10 +10,22 @@ import struct
 import socket
 import select
 import bluetooth
-import bluetooth._bluetooth as _bt
+import threading
 
+class NotYetImplemented(Exception):
+    def __init__(self, value):
+        self.value = value
 
+class FormatError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+class DeviceError(Exception):
+    def __init__(self, value):
+        self.value = value
+        
 def get_time():
+    # Required for logging
     now = datetime.datetime.today()
     return now.strftime("%d/%m/%Y %H:%M:%S | ")
 
@@ -129,7 +144,7 @@ class Format:
 
         Parameters
         ----------
-        data: str
+        data: bytes
             Plaintext string which may or may not contain a message packet
 
         Returns
@@ -275,7 +290,6 @@ class Message():
         components = [self.source, self.destination, self.payload]
         return components
     
-
 class Device():
     """
     Device class is a wrapper for a Bluetooth socket. Defining this as a
@@ -290,8 +304,7 @@ class Device():
     
     This class handles all direct interaction with sockets. 
     """
-    def __init__(self, address, name):
-        self.address = address
+    def __init__(self, name):
         self.name = name
         self.subscriptions = set()
         self.sock = None
@@ -304,47 +317,6 @@ class Device():
         MUST BE LEFT IN, OR SELECT WILL NOT WORK ON DEVICES
         """
         return self.sock.fileno()
-    
-    def connect(self):
-        """
-        Attemps to connect to the bluetooth device with the address
-        contained in self.address.
-
-        This method is defined separately from init to allow for greater
-        flexibility (e.g. keeping information about devices that we are
-        not currently connected to.)
-        
-        Parameters
-        ----------
-        N/A
-
-        Returns
-        -------
-        bool
-            True if successful
-            False otherwise
-        """
-        success = False
-        try:
-            sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.connect((self.address, 1))
-            sock.settimeout(2.0)
-
-            # Actually, if the socket is set to be non-blocking, it terminates
-            # immediately with an error if there is no data to be read
-            #sock.setblocking(0)
-
-            self.sock = sock
-            success = True
-            
-        except bluetooth.BluetoothError as e:
-            print(e)
-            
-        if success:
-            return True
-        else:
-            return False
 
     def disconnect(self):
         """
@@ -360,18 +332,13 @@ class Device():
             True if successful
             False otherwise
         """
-        success = False
         try:
             self.sock.close()
-            success = True
+            return None
             
-        except bluetooth.BluetoothError as e:
-            print(e)
-                
-        if success:
-            return True
-        else:
-            return False
+        except Exception as e:
+            return e
+            
 
     def send(self, components):
         """
@@ -391,17 +358,13 @@ class Device():
             False otherwise
         """
         packet = Format().package(components)
-        success = False
         try:
             self.sock.send(packet)
-            success = True
+            return None
             
-        except bluetooth.BluetoothError as e:
-            print(e)
-        if success:
-            return True
-        else:
-            return False
+        except Exception as e:
+            return e
+            
 
     def receive(self):
         """
@@ -425,7 +388,7 @@ class Device():
             The packets received from the socket.
         """
         
-        data = ""
+        data = b""
 
         while True:
             # Loop terminates at timout or error
@@ -433,33 +396,135 @@ class Device():
                 # Read the data in the buffer
                 data += self.sock.recv(4096)
                 packets = Format().find_packets(data)
-                if len(packets) > 0:
-                    return packets
                 
-            except bluetooth.BluetoothError as e:
+                if len(packets) > 0:
+                    return packets, None
+                
+            except Exception as e:
                 # When there is no more data to read, we get Bluetooth error
                 # In this case, we can wait a little while to see if more data is
                 # transmitted
-                return e
+                return '', e
 
         # Error handling if no packet is received        
         if len(data) > 0:
-            raise Error("Listen timeout: data received but incorrectly packaged. " +
+            return '', FormatError("Listen timeout: data received but incorrectly packaged. " +
                         "data: " + data.decode(errors="ignore"))
         else:
-            raise Error("Listen timeout: no data transmitted!")
+            return '', DeviceError("Listen timeout: no data transmitted!")
 
         return []
 
+class BluetoothDevice(Device):
+    """
+    Extension of the Device class
+    
+    Handles Bluetooth-specific connections
+    """
+    def __init__(self, name, address):
+        Device.__init__(self, name)
+        self.address = address
+    
+    def connect(self):
+        """
+        Attemps to connect to the bluetooth device with the address
+        contained in self.address.
 
-class Hub():
-    """
-    The Hub class handles a list of devices. It also relays messages between
-    devices and responds to messages sent to itself.
-    """
-    # Set default scan duration
-    scan_duration = 5
-    def __init__(self, address_pattern="SCD_ARDUINO", scan_duration=5):
+        This method is defined separately from init to allow for greater
+        flexibility (e.g. keeping information about devices that we are
+        not currently connected to.)
+        
+        Parameters
+        ----------
+        N/A
+
+        Returns
+        -------
+        bool
+            True if successful
+            False otherwise
+        """
+
+        try:
+            sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+            # The line below will not work on a Windows system because of the limitations
+            # of Bluez - unable to set socket options.
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            #sock.settimeout(5)
+            sock.connect((self.address, 1))
+            
+
+            self.sock = sock
+            return None
+            
+            
+        except Exception as e:
+            return e
+
+    def still_connected(self):
+        """
+        Checks if the device is still actually available
+        (e.g. if it has powered down or moved out of range it won't be,
+        but communications will fail).
+
+        Tests availability using the getpeername method, which returns an
+        error if the device is not longer available
+
+        Parameters
+        ----------
+        N/A
+
+        Returns
+        -------
+        bool
+            True if connected
+            False otherwise
+        """
+        try:
+            self.sock.getpeername()
+            return True
+        except bluetooth.BluetoothError as e:
+            # Rather than returning this error, we just use it to test
+            # whether the socket still links to an endpoint
+            return False
+                
+
+
+
+        
+        
+class TCPDevice(Device):
+    def __init__(self, name, port):
+        Device.__init__(self, name)
+        self.port = port
+
+    def get_ip_address(self):
+        # Since some of the computers in the network use dynamic IP addresses, it
+        # is better to start with a name and find the IP
+        try:
+            self.address = socket.gethostbyname(self.name)
+            return None
+        except Exception as e:
+            return e
+      
+    
+    def connect(self, timeout):
+        
+        # Attempt to create the connection
+        
+        try:
+            self.sock = socket.create_connection((self.address, self.port), timeout=timeout)
+            return None
+        except Exception as e:
+            # socket.timeout is a common error
+            return e
+
+
+class Switch():
+    # Connects to any available BT devices matching its address pattern
+    # Relays packets between nodes in local network
+
+    def __init__(self, address_pattern, scan_duration=5):
         """
         Initialise a hub
         
@@ -475,73 +540,27 @@ class Hub():
         -------
         N/A
         """
-        self.own_address = self.__get_own_address()
         self.address_pattern = address_pattern
         self.devices = []
-
+        
         # Error handling for scan duration
         # If not an integer, attempt to integerise it. If not positive
         # or equal to zero, leave the scan duration as default.
         if type(scan_duration) != int:
             try:
-                scan_duraton = int(scan_duration)
+                scan_duration = int(scan_duration)
                 if scan_duration > 0:
                     self.scan_duration = scan_duration
             except:
+                self.scan_duration = 5
                 #LOGGING
                 pass
         else:
             if scan_duration > 0:
                 self.scan_duration = scan_duration
-        
 
-    def __error_not_on_network(self, source, destination):
-        """
-        Assembles a message to be sent to a device to inform them that
-        their message could not be sent because their intended recipient
-        is not on the network
-        
-        Parameters
-        ----------
-        source: str
-            MAC address of device sending undeliverable message
-        destination: str
-            MAC address of the intended recipient of the original message.
-            
-        Returns
-        -------
-        Message
-            Message object ready to be packaged and sent back to the
-            original source address
-        """
-        payload = 'Error ' + destination + ' not on network'
-        return Message([self.own_address, source, payload])
-
-    def __reply_list_other_devices(self, source):
-        """
-        Assembles a message containing a list of other devices on the
-        network
-        
-        Parameters
-        ----------
-        source: str
-            MAC address of querying device
-
-        Returns
-        -------
-        Message
-            Message object ready to be packaged and sent back to the
-            source address
-        """
-        other_devices = [d.address for d in self.devices if d.address != source]
-        payload = 'Reply ' + ' '.join(other_devices)
-        return Message([self.own_address, source, payload])
-    
     def __get_own_address(self):
         """
-        Adapted from pybluez documentation
-        (pybluez/examples/advaced/read-local-bdaddr)
-
         Checks local device (device id = 0) and returns the bluetooth
         address. 
 
@@ -556,32 +575,27 @@ class Hub():
             '88:53:2E:86:BE:8C'
 
         """
-        hci_sock = _bt.hci_open_dev(0)
-        old_filter = hci_sock.getsockopt( _bt.SOL_HCI, _bt.HCI_FILTER, 14)
-        flt = _bt.hci_filter_new()
-        opcode = _bt.cmd_opcode_pack(_bt.OGF_INFO_PARAM, 
-                _bt.OCF_READ_BD_ADDR)
-        _bt.hci_filter_set_ptype(flt, _bt.HCI_EVENT_PKT)
-        _bt.hci_filter_set_event(flt, _bt.EVT_CMD_COMPLETE);
-        _bt.hci_filter_set_opcode(flt, opcode)
-        hci_sock.setsockopt( _bt.SOL_HCI, _bt.HCI_FILTER, flt )
+        mac = ''
+        if sys.platform.startswith("win"):
+            interfaces = subprocess.check_output(["getmac", "/V"]).decode().split("\n")
+            for interface in interfaces:
+                if interface.startswith("Bluetooth"):
+                    macs = re.findall("[A-Z0-9]{2}" + "-[A-Z0-9]{2}"*5, interface)
+                    if len(macs) > 0:
+                        mac = macs[0].replace('-', ':')
 
-        _bt.hci_send_cmd(hci_sock, _bt.OGF_INFO_PARAM, _bt.OCF_READ_BD_ADDR )
-
-        pkt = hci_sock.recv(255)
-
-        status,raw_bdaddr = struct.unpack("xxxxxxB6s", pkt)
-        assert status == 0
-
-        t = [ "%X" % ord(b) for b in raw_bdaddr ]
-        t.reverse()
-        bdaddr = ":".join(t)
-
-        # restore old filter
-        hci_sock.setsockopt( _bt.SOL_HCI, _bt.HCI_FILTER, old_filter )
-        return bdaddr.encode('ascii', 'ignore')
-
+        elif sys.platform.startswith("linux"):
+            interfaces = subprocess.check_output(["hcitool", "dev"]).decode().split("\n")
+            for interface in interfaces:
+                if interface.strip().startswith("hci"):
+                    mac = re.findall("[A-Z0-9]{2}" + ":[A-Z0-9]{2}"*5, interface)[0]
+        #mac = ':'.join(("%012X" % uuid.getnode())[i:i+2] for i in range(0, 12, 2))
+        return mac.encode('ascii', 'ignore')
+    
+        
     def __scan(self):
+        # As in Hub. Should be scanning in background and spawn new process if 
+        # an unknown device with the correct address pattern is found
         """
         Search for nearby Bluetooth devices whose friendly names match the
         chosen address pattern.
@@ -602,100 +616,166 @@ class Hub():
             address = str(device)
             if name != None:
                 if name.startswith(self.address_pattern):
-                    matching_devices.append(Device(address, name))
+                    matching_devices.append(BluetoothDevice(name, address))
         return matching_devices
-
     
-    def update_devices(self):
-        """
-        Uses scan function to find nearby devices whose friendly names match
-        the address pattern. Attempts to connect to matching devices. If successful,
-        appends the new device to the list of devices.
-        
-        Parameters
-        ----------
-        N/A
-            
-        Returns
-        -------
-        N/A
-            
-        Method notes
-        ------------
-        There exist three groups of devices:
-            1. Those that we discovered in our scan but aren't connected to
-            2. Those that we discovered in our scan and are already connected to
-            3. Those that we thought we were connected to, but didn't discover in
-               our scan
+    def __relay_local_packet(self, packet, device):
+        # If a packet is destined for one of the switch's own dependent devices, forward
+        # it to that device
 
-            For now, we will ignore case 3.
-        """
-        
-        matching_devices = self.__scan()
-        logging.info(get_time() + 'Found ' + str(len(matching_devices)) + ' matching devices')
-        # MAC addresses are globally unique, so we can use them to truly distinguish
-        # between devices
-
-        for match in matching_devices:
-            # If we are not already connected to this device...
-            if match.address not in [d.address for d in self.devices]:
-                # Try to connect. If successful, add device to devices.
-                if match.connect() == True:
-                    self.devices.append(match)
-                else:
-                    logging.warn(get_time() + 'Unable to connect to device '
-                                 + match.name + ' at ' + match.address + '.')
-                
-    def handle_message(self, message, verbose=True):
-        """
-        Takes a message input.
-
-        Two cases:
-        - Message destination is hub: hub replies as appropriate
-        - Message destination is not hub: hub relays message. If
-          unsuccessfull, an error message is sent to the source.
-
-        Parameters
-        ----------
-        message: Message
-            A received message object
-        verbose: bool
-            If verbose, information is printed to the terminal
-
-        Returns
-        -------
-        N/A
-        """
-        if message.destination == self.own_address:
-            if verbose:
-                logging.info(get_time() + 'Message is for hub: ' + message.content)
-                print('Message is for hub')
-            # 1. Ask who else is here?
-            # 2.
-            pass
+        # Is this redundant? Is functionality already handled bu Device class?
+        flag = device.send(packet)
+        if flag is None:
+            print('Packet sucessfully sent')
         else:
-            # Relay the message
-            found_device = False
-            for dev in self.devices:
-                if dev.address == message.destination:
-                    found_device = True
-                    if verbose:
-                        print('Relaying message to destination')
-                    if dev.send(message.components()):
-                        logging.info(get_time() + 'Relayed message to destination')
-                    else:
-                        logging.warning(get_time() + 'Not able to relay message to destination')
-                    
+            raise flag
 
-            # If the intended destination device is not reachable, send an error message
-            # back to the source
-            if not found_device:
-                if verbose:
-                    print('Destination not on network. Sending error message to source')
-                logging.info(get_time() + 'Device is not on network. Sending error message back to source')
-                dev.send(self.__error_not_on_network(message.source, message.destination).package())
-                
+    def __prune_devices(self):
+        # Remove devices that are no longer available
+        # Devices that we are connected to do not show up in scans.
+        # Therefore, we want to go through the list of connected devices and
+        # prune any which have left.
+
+        # Later, we may want to keep a list of previously connected devices
+        
+        current_devices = []
+        for device in self.devices:
+            if device.still_connected:
+                current_devices.append(device)
+            else:
+                # Close up shop...
+                device.disconnect()
+        self.devices = current_devices
                     
+    def device_manager(self):
+        # This function will need to be run in a thread
+        # Continually scans for devices using __scan
+        # Updates our list of devices
+
+        # Remove devices that are no longer active
+        
+        print("Removing unavailable devices")
+        self.__prune_devices()
+
+        # Scan for new devices
+        print("Scanning")
+        new_devices = self.__scan()
+
+        print("Discovered " + str(len(new_devices)) + " new devices")
+        # Add new devices:
+        for dev in new_devices:
+            # Attempt to connect
+            print("Attempting to connect to device " + dev.address)
+            flag = dev.connect()
+            
+            if flag is None:
+                self.devices.append(dev)
+                print("Successfully connected!")
+            else:
+                # For now, we report all errors as we find them. Later they
+                # will just be logged.
+                print(flag)
+
+        # If we have at least two devices, sleep for a while so they can chat
+        if len(self.devices) >= 2:
+            time.sleep(20)
+        else:
+            print("Too few devices on network: we are only connected to " + str(len(self.devices)) + " devices")
+
+
+    def message_manager(self):
+        # This function needs to be run in a thread
+        # Waits for devices to be ready to send information, and then receives
+        # from them and handles their messages.
+
+        # Does it have to spawn a new thread every time it needs to relay a message?
+
+        if len(self.devices) > 0:
+            print("Waiting for the next event")
+            ready_to_read, ready_to_write, ready_with_errors = select.select(self.devices, [], [])
+            for ready_device in ready_to_read:
+                #logging.info(get_time() + 'Device ' + dev.name + ' at ' + dev.address + ' is ready to read.')
+                packets, flag = ready_device.receive()
+                
+                if flag is None:
+                    for packet in packets:
+                        #logging.info(get_time() + 'Read packet from ' + dev.name + ' at ' + dev.address + '.')
+                        message = Message(packet)
+                        print("Received packet from " + ready_device.address)
+                        # Send the message on. 
+                        for dev in self.devices:
+                            if message.destination == dev.address:
+                                self.__relay_local_packet(packet, dev)
+                else:
+                    #logging.warning(get_time() + 'Unable to read from ' + dev.name + ' at ' + dev.address + '.')
+                    raise flag
+        else:
+            # Not able to connect to any devices!
+            # Do not print, or will happen endlessly...
+            pass
+
+    def monitor(self):
+        # Debugging thread: prints out the devices currently connected
+        time.sleep(3)
+        print("Connected to " + " ,".join([d.address for d in self.devices]))
+        
+    def shutdown(self):
+        # Terminate threads and gracefully close all connections
+        for dev in self.devices:
+            dev.disconnect()
+        
+
+
+class SwitchPlus(Switch):
+    # Attempts to connect to a coordinator
+    # If successful, connects to any available BT devices matching its address pattern
+    # Relays packets between nodes on local network
+    # Sends traffic to unknown addresses up to Coordinator
+    # Replies to Coordinator if necessary.
+    def __init__(self, address_pattern, host_name, port):
+        #self.coordinator = None
+        #self.public_key = ''
+        #self.private_key = ''
+        #self.coordinator_public_key = ''
+        raise NotYetImplemented()
+    def __reply_to_coordinator(self, payload):
+        raise NotYetImplemented()
+    def __send_packet_up(self, packet):
+        raise NotYetImplemented()
+    def __encrypt(self, payload):
+        # Traffic sent up to coordinator should be encrypted with
+        # own public key
+        raise NotYetImplemented()
+    def __decrypt(self, payload):
+        # The coordinator sends encrypted messages. Decrypt using own private key.
+        raise NotYetImplemented()
+        
+    def __find_coordinator(self):
+        raise NotYetImplemented()
+            
+    def switchplus_loop(self, logging=True):
+        # if coordinator is None:
+            # Try to connect to coordinator
+        # else:
+            # use switch_loop
+        raise NotYetImplemented()
+
+class Coordinator():
+    # Maintains a routing table
+    # Waits to be connected to via TCP (does not scan)
+    # Routes traffic to distant nodes
+    # Coordinator must always be listening and must accept all connections
+    # (ignore authentication for now
+    def __init__(self):
+        self.routing_table = {}
+        # Later, when we implement authentication, Coordinator will compile
+        # a list of Swich devices' public keys
+        #self.device_public_keys = {}
+        raise NotYetImplemented()
+    def __update_routing_table(self, message_source, message_sender):
+        self.routing_table[message_source] = message_sender
+    def loop(self, logging=True):
+        raise NotYetImplemented()
 
 if __name__ == "__main__":
 
@@ -706,36 +786,32 @@ if __name__ == "__main__":
         level = logging.DEBUG,
         )
     
-    logging.info(get_time() + 'Started hub program')
-    
-    myhub = Hub()
-    logging.info(get_time() + 'Started Hub')
-    
-    print('Searching for devices')
-    logging.info(get_time() + 'Searching for devices...')
-    myhub.update_devices()
-    
-    if len(myhub.devices) > 0:
-        for dev in myhub.devices:
-            print('Connected to ' + dev.name + ' at ' + dev.address)
-            logging.info(get_time() + 'Connected to device ' + dev.name + ' at ' + dev.address + '.')
+    #logging.info(get_time() + 'Started hub program')
 
+    # Initialise switch    
+    myswitch = Switch(address_pattern='SCD_ARDUINO')
 
-        # Select - wait for devices to be ready. When one is, handle messages.
-        print('Waiting for packets')
+    # Start off both threads
+    try:
         while True:
-            ready_to_read, ready_to_write, ready_with_errors = select.select(myhub.devices, [], [])
-            for dev in ready_to_read:
-                logging.info(get_time() + 'Device ' + dev.name + ' at ' + dev.address + ' is ready to read.')
-                packets = dev.receive()
-
-                if len(packets) > 0:
-                    logging.info(get_time() + 'Read packet from ' + dev.name + ' at ' + dev.address + '.')
-                    message = Message(packets[0])
-                    myhub.handle_message(message)
-                    print(message.payload)
-                else:
-                    logging.warning(get_time() + 'Unable to read from ' + dev.name + ' at ' + dev.address + '.')
+            scan_thread = threading.Thread(target=myswitch.device_manager(), daemon=True)
+            relay_thread = threading.Thread(target=myswitch.message_manager(), daemon=True)
+            monitor_thread = threading.Thread(target=myswitch.monitor(), daemon=True)
             
-    else:
-        print('Unable to connect to any devices')
+            scan_thread.start()
+            relay_thread.start()
+            monitor_thread.start()
+        
+    except KeyboardInterrupt:
+        print("Ctrl-C Pressed!")
+    finally:
+        myswitch.shutdown()
+        print("All devices disconnected.")
+    
+
+    #logging.info(get_time() + 'Started Hub')
+
+
+    # FINALLY
+    
+    

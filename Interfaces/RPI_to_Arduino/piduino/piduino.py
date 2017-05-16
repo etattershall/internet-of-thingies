@@ -9,6 +9,8 @@ import warnings
 import struct
 import socket
 import select
+import serial
+import json
 import bluetooth
 import threading
 
@@ -30,265 +32,6 @@ def get_time():
     return now.strftime("%d/%m/%Y %H:%M:%S | ")
 
 
-class Format:
-    """
-    Foramt Class contains all information about packet formatting.
-
-    Constants START, DIVIDE and END are characters or character strings used to
-    format packets.
-    e.g.
-    START = '<', DIVIDE = '#' and END = '>' would yield packets in the form:
-    <00:00:00:00:00:00#00:00:00:00:00:01#Hello World!>
-
-    When choosing constants, the use of FORBIDDEN characters :\.^[]{}()?*+|$
-    must be avoided, since these interact with the regular expressions we use
-    in unpredictable ways.
-
-    Notes on class:
-    ---------------
-    Format has no knowledge of what the internal message components are
-    - e.g. 'source', 'destination', 'payload'. It only knows about the external
-    packaging of the message string.
-    """
-    START = '<'
-    DIVIDE = '#'
-    END = '>'
-    ESCAPE = '@'
-    FORBIDDEN = ":\.^[]{}()?*+|$" 
-    COMPONENTS = 3
-    
-    def __init__(self):
-        pass
-
-    def __check_constants(self):
-        """
-        Checks that the constants defined in this class are not forbidden
-
-        Parameters
-        ----------
-        N/A
-
-        Returns
-        -------
-        bool
-            True if the constants are not forbidden
-            False otherwise
-        """
-        constants = [self.START, self.DIVIDE, self.END, self.ESCAPE]
-        if len(set(constants) & set(self.FORBIDDEN)) > 0:
-            return False
-        else:
-            return True
-
-    def __escape(self, data):
-        """
-        If the START, DIVIDE or END constants are present in the message
-        payload, it will cause problems when the message is unpackaged
-        unless these constants are escaped.
-
-        To escape a character, we add the ESCAPE string before it. We
-        must also escape any characters matching the escape string itself.
-
-        Parameters
-        ----------
-        data: str
-            Plaintext string, normally a message payload which may or may
-            not contain reserved characters
-
-        Returns
-        -------
-        str
-            Escaped string in which all reserved characters are preceded by the
-            ESCAPE character.
-            
-        """
-        # Must escape escapes first (otherwise everything else will be
-        # escaped twice!)
-        data = re.sub(self.ESCAPE, 2*self.ESCAPE, data)
-        reserved = [self.START, self.DIVIDE, self.END]
-        for char in reserved:
-            data = re.sub(char, self.ESCAPE + char, data)
-        return data
-
-    def __unescape(self, data):
-        """
-        Reserved characters such as START, END and DIVIDE cause problems
-        when messages are unpacked. Therefore, they have been escaped. This
-        function removes ESCAPE characters preceding reserved characters
-        from an input string
-
-        Parameters
-        ----------
-        data: str
-            Plaintext string, normally a message payload which may or may
-            not contain escaped reserved characters
-
-        Returns
-        -------
-        str
-            Unescaped string in which all reserved characters have been stripped
-            of the escape character
-            
-        """
-        reserved = [self.START, self.DIVIDE, self.END]
-        for char in reserved:
-            data = re.sub(self.ESCAPE + char, char, data)
-        # Must unescape escapes last
-        data = re.sub(2*self.ESCAPE, self.ESCAPE, data)
-        return data
-    
-    def find_packets(self, data):
-        """
-        Checks to see if any packets in the required format are contained in the
-        data presented. If no packets are present, an empty list is returned.
-
-        Parameters
-        ----------
-        data: bytes
-            Plaintext string which may or may not contain a message packet
-
-        Returns
-        -------
-        list of lists of strings
-            Returns a list of valid packets. Each packet is a list of components.
-            e.g.
-            [[source1, destination1, payload1], [source2, destination2, payload2],...]        
-        """
-
-        packets = []
-        current_packet = []
-        current_component = ""
-        reserved = [self.START, self.DIVIDE, self.END, self.ESCAPE]
-        char_is_escaped = False
-        inside_packet = False
-        for char in data.decode(errors="ignore"):
-            # If the previous character was the escape character...
-            if char_is_escaped:
-                # Nothing to see here, move along.
-                if inside_packet:
-                    current_component += char
-                    char_is_escaped = False
-                else:
-                    char_is_escaped = False
-            else:
-                # If the current character is the escape character (and is not itself escaped)...
-                if char == self.ESCAPE:
-                    char_is_escaped = True
-                    if inside_packet:
-                        current_component += char
-                elif char == self.START:
-                    if inside_packet:
-                        # Something is very wrong...
-                        # Empty out the current packet and start again
-                        current_packet = []
-                        current_component = ""
-                    else:
-                        inside_packet = True
-                elif char == self.END:
-                    if inside_packet:
-                        # Tie off this packet and add it to the pile
-                        current_packet.append(current_component)
-                        packets.append(current_packet)
-                        # Clear out the old data
-                        current_packet = []
-                        current_component = ""
-                    else:
-                        pass
-                elif char == self.DIVIDE:
-                    if inside_packet:
-                        # We are going to start a new component!
-                        current_packet.append(current_component)
-                        # Clear out the old data
-                        current_component = ""
-                    else:
-                        pass
-                else:
-                    if inside_packet:
-                        current_component += char
-                    else:
-                        pass
-    
-        
-        unescaped_packets = []
-        for packet in packets:
-            # Ignore packets with the wrong number of components
-            if len(packet) == self.COMPONENTS:
-                # The components must be unescaped before they are passed on
-                unescaped_packets.append([self.__unescape(c) for c in list(packet)])
-        return unescaped_packets
-
-
-                       
-    def package(self, components):
-        """
-        Takes a list of message components and packages them using the chosen
-        format
-        e.g.
-        ['00:00:00:00:00:00', '00:00:00:00:00:01', 'Hello World']
-            --> '<00:00:00:00:00:00#00:00:00:00:00:01#HelloWorld>#'
-
-        Also escapes any reserved characters in any of the components
-        
-        Parameters
-        ----------
-        components: list of strings
-            List of message components in the agreed-upon order
-
-        Returns
-        -------
-        str
-            Packet
-            
-        """
-        if len(components) != self.COMPONENTS:
-            raise Exception('Wrong number of components!')
-        # Escape all components
-        escaped_components = [self.__escape(c) for c in components]
-        packet = self.START + escaped_components[0]
-        for c in escaped_components[1:]:
-            packet += self.DIVIDE + c
-        packet += self.END
-        return packet
-    
-    
-    
-class Message():
-    """
-    Class contains all the information about the contents of packets.
-    
-    A message is an object with a source, an intended destination and
-    a payload.
-    
-    Notes on class:
-    ---------------
-    Message has no knowledge about how the packets are formatitted -
-    e.g. <###>; or about how characters are escaped. All of that is handled
-    by the Format class.
-
-    The main responsibility of this class is knowing the *order* of the
-    transmitted message components. If more components are added, then the order
-    will have to be changed in this class.
-    """
-    def __init__(self, components):
-        self.source = components[0]
-        self.destination = components[1]
-        self.payload = components[2]
-        
-    def components(self):
-        """
-        Returns a list of message components in the correct order
-
-        Parameters
-        ----------
-        N/A
-
-        Returns
-        -------
-        list of strings
-            Ordered message components   
-        """
-        components = [self.source, self.destination, self.payload]
-        return components
     
 class Device():
     """
@@ -340,7 +83,7 @@ class Device():
             return e
             
 
-    def send(self, components):
+    def send(self, message):
         """
         Attemps to send a message to the device.
 
@@ -357,9 +100,9 @@ class Device():
             True if successful
             False otherwise
         """
-        packet = Format().package(components)
+        packet = json.dumps(message)
         try:
-            self.sock.send(packet)
+            self.sock.send(packet.encode('utf-8'))
             return None
             
         except Exception as e:
@@ -395,23 +138,25 @@ class Device():
             try:
                 # Read the data in the buffer
                 data += self.sock.recv(4096)
-                packets = Format().find_packets(data)
+                try:
+                    message = json.loads(data)
+                except json.JSONDecodeError as e:
+                    message = None
                 
-                if len(packets) > 0:
-                    return packets, None
+                return message, ''
                 
             except Exception as e:
                 # When there is no more data to read, we get Bluetooth error
                 # In this case, we can wait a little while to see if more data is
                 # transmitted
-                return '', e
+                return None, e
 
         # Error handling if no packet is received        
         if len(data) > 0:
-            return '', FormatError("Listen timeout: data received but incorrectly packaged. " +
+            return None, FormatError("Listen timeout: data received but incorrectly packaged. " +
                         "data: " + data.decode(errors="ignore"))
         else:
-            return '', DeviceError("Listen timeout: no data transmitted!")
+            return None, DeviceError("Listen timeout: no data transmitted!")
 
         return []
 
@@ -425,7 +170,7 @@ class BluetoothDevice(Device):
         Device.__init__(self, name)
         self.address = address
     
-    def connect(self):
+    def connect(self, timeout):
         """
         Attemps to connect to the bluetooth device with the address
         contained in self.address.
@@ -459,7 +204,13 @@ class BluetoothDevice(Device):
             
             
         except Exception as e:
-            return e
+            # Setting a timeout causes an error to be thrown even if the connection
+            # is made. In this case, ignore the error and carry on.
+            if str(e) == "(77, 'File descriptor in bad state')":
+                self.sock = sock
+                return None
+            else:
+                return e
 
     def still_connected(self):
         """
@@ -493,10 +244,14 @@ class BluetoothDevice(Device):
 
         
         
-class TCPDevice(Device):
+class SerialDevice(Device):
     def __init__(self, name, port):
         Device.__init__(self, name)
         self.port = port
+        self.address = None
+        flag = self.get_ip_address()
+        if flag:
+            raise flag
 
     def get_ip_address(self):
         # Since some of the computers in the network use dynamic IP addresses, it
@@ -505,13 +260,11 @@ class TCPDevice(Device):
             self.address = socket.gethostbyname(self.name)
             return None
         except Exception as e:
+            
             return e
       
-    
     def connect(self, timeout):
-        
         # Attempt to create the connection
-        
         try:
             self.sock = socket.create_connection((self.address, self.port), timeout=timeout)
             return None
@@ -519,8 +272,46 @@ class TCPDevice(Device):
             # socket.timeout is a common error
             return e
 
+class Server():
+    def __init__(self):
+        self.devices = []
+        
+    def relay_local_packet(self, packet, device):
+        # If a packet is destined for one of the switch's own dependent devices, forward
+        # it to that device
 
-class Switch():
+        # Is this redundant? Is functionality already handled bu Device class?
+        flag = device.send(packet)
+        if flag is None:
+            print('Packet sucessfully sent')
+        else:
+            raise flag
+
+    def __prune_devices(self):
+        # Remove devices that are no longer available
+        # Devices that we are connected to do not show up in scans.
+        # Therefore, we want to go through the list of connected devices and
+        # prune any which have left.
+
+        # Later, we may want to keep a list of previously connected devices
+        
+        current_devices = []
+        for device in self.devices:
+            if device.still_connected:
+                current_devices.append(device)
+            else:
+                # Close up shop...
+                device.disconnect()
+        self.devices = current_devices
+        
+    def shutdown(self):
+        # Terminate threads and gracefully close all connections
+        for dev in self.devices:
+            dev.disconnect()
+
+
+
+class BTServer(Server):
     # Connects to any available BT devices matching its address pattern
     # Relays packets between nodes in local network
 
@@ -540,8 +331,8 @@ class Switch():
         -------
         N/A
         """
+        Server.__init__(self, name)
         self.address_pattern = address_pattern
-        self.devices = []
         
         # Error handling for scan duration
         # If not an integer, attempt to integerise it. If not positive
@@ -619,35 +410,9 @@ class Switch():
                     matching_devices.append(BluetoothDevice(name, address))
         return matching_devices
     
-    def __relay_local_packet(self, packet, device):
-        # If a packet is destined for one of the switch's own dependent devices, forward
-        # it to that device
 
-        # Is this redundant? Is functionality already handled bu Device class?
-        flag = device.send(packet)
-        if flag is None:
-            print('Packet sucessfully sent')
-        else:
-            raise flag
-
-    def __prune_devices(self):
-        # Remove devices that are no longer available
-        # Devices that we are connected to do not show up in scans.
-        # Therefore, we want to go through the list of connected devices and
-        # prune any which have left.
-
-        # Later, we may want to keep a list of previously connected devices
-        
-        current_devices = []
-        for device in self.devices:
-            if device.still_connected:
-                current_devices.append(device)
-            else:
-                # Close up shop...
-                device.disconnect()
-        self.devices = current_devices
                     
-    def device_manager(self):
+    def update_devices(self):
         # This function will need to be run in a thread
         # Continually scans for devices using __scan
         # Updates our list of devices
@@ -666,7 +431,7 @@ class Switch():
         for dev in new_devices:
             # Attempt to connect
             print("Attempting to connect to device " + dev.address)
-            flag = dev.connect()
+            flag = dev.connect(timeout=5)
             
             if flag is None:
                 self.devices.append(dev)
@@ -676,89 +441,7 @@ class Switch():
                 # will just be logged.
                 print(flag)
 
-        # If we have at least two devices, sleep for a while so they can chat
-        if len(self.devices) >= 2:
-            time.sleep(20)
-        else:
-            print("Too few devices on network: we are only connected to " + str(len(self.devices)) + " devices")
 
-
-    def message_manager(self):
-        # This function needs to be run in a thread
-        # Waits for devices to be ready to send information, and then receives
-        # from them and handles their messages.
-
-        # Does it have to spawn a new thread every time it needs to relay a message?
-
-        if len(self.devices) > 0:
-            print("Waiting for the next event")
-            ready_to_read, ready_to_write, ready_with_errors = select.select(self.devices, [], [])
-            for ready_device in ready_to_read:
-                #logging.info(get_time() + 'Device ' + dev.name + ' at ' + dev.address + ' is ready to read.')
-                packets, flag = ready_device.receive()
-                
-                if flag is None:
-                    for packet in packets:
-                        #logging.info(get_time() + 'Read packet from ' + dev.name + ' at ' + dev.address + '.')
-                        message = Message(packet)
-                        print("Received packet from " + ready_device.address)
-                        # Send the message on. 
-                        for dev in self.devices:
-                            if message.destination == dev.address:
-                                self.__relay_local_packet(packet, dev)
-                else:
-                    #logging.warning(get_time() + 'Unable to read from ' + dev.name + ' at ' + dev.address + '.')
-                    raise flag
-        else:
-            # Not able to connect to any devices!
-            # Do not print, or will happen endlessly...
-            pass
-
-    def monitor(self):
-        # Debugging thread: prints out the devices currently connected
-        time.sleep(3)
-        print("Connected to " + " ,".join([d.address for d in self.devices]))
-        
-    def shutdown(self):
-        # Terminate threads and gracefully close all connections
-        for dev in self.devices:
-            dev.disconnect()
-        
-
-
-class SwitchPlus(Switch):
-    # Attempts to connect to a coordinator
-    # If successful, connects to any available BT devices matching its address pattern
-    # Relays packets between nodes on local network
-    # Sends traffic to unknown addresses up to Coordinator
-    # Replies to Coordinator if necessary.
-    def __init__(self, address_pattern, host_name, port):
-        #self.coordinator = None
-        #self.public_key = ''
-        #self.private_key = ''
-        #self.coordinator_public_key = ''
-        raise NotYetImplemented()
-    def __reply_to_coordinator(self, payload):
-        raise NotYetImplemented()
-    def __send_packet_up(self, packet):
-        raise NotYetImplemented()
-    def __encrypt(self, payload):
-        # Traffic sent up to coordinator should be encrypted with
-        # own public key
-        raise NotYetImplemented()
-    def __decrypt(self, payload):
-        # The coordinator sends encrypted messages. Decrypt using own private key.
-        raise NotYetImplemented()
-        
-    def __find_coordinator(self):
-        raise NotYetImplemented()
-            
-    def switchplus_loop(self, logging=True):
-        # if coordinator is None:
-            # Try to connect to coordinator
-        # else:
-            # use switch_loop
-        raise NotYetImplemented()
 
 class Coordinator():
     # Maintains a routing table
@@ -778,40 +461,4 @@ class Coordinator():
         raise NotYetImplemented()
 
 if __name__ == "__main__":
-
-    # Start logging
-    LOG_FILENAME = 'hub_log.out'
-    logging.basicConfig(
-        filename=LOG_FILENAME,
-        level = logging.DEBUG,
-        )
-    
-    #logging.info(get_time() + 'Started hub program')
-
-    # Initialise switch    
-    myswitch = Switch(address_pattern='SCD_ARDUINO')
-
-    # Start off both threads
-    try:
-        while True:
-            scan_thread = threading.Thread(target=myswitch.device_manager(), daemon=True)
-            relay_thread = threading.Thread(target=myswitch.message_manager(), daemon=True)
-            monitor_thread = threading.Thread(target=myswitch.monitor(), daemon=True)
-            
-            scan_thread.start()
-            relay_thread.start()
-            monitor_thread.start()
-        
-    except KeyboardInterrupt:
-        print("Ctrl-C Pressed!")
-    finally:
-        myswitch.shutdown()
-        print("All devices disconnected.")
-    
-
-    #logging.info(get_time() + 'Started Hub')
-
-
-    # FINALLY
-    
-    
+    pass

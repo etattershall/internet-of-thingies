@@ -24,6 +24,10 @@ class NotYetImplemented(Exception):
 class NotConnected(Exception):
     def __init__(self, value):
         self.value = value
+
+class AuthenticationError(Exception):
+    def __init__(self, value):
+        self.value = value
         
 def comport_scan(device_type='Arduino'):
     # Returns a list of com ports connected to arduinos
@@ -54,11 +58,11 @@ class SerialDevice():
             return e
     
     def fileno(self):
-        if ser != None:
-            return ser.fileno()
+        if self.ser != None:
+            return self.ser.fileno()
         else:
             raise NotConnected("Need to connect first!")
-            
+        
     def send(self, message):
         packet = json.dumps(message).encode('ascii')
         try:
@@ -67,7 +71,7 @@ class SerialDevice():
         except Exception as e:
             return e
             
-    def receive(self, timeout=10):
+    def receive_json(self, timeout=10):
         '''
         Receives a single message from a device, unless timeout is reached first 
         '''
@@ -94,6 +98,22 @@ class SerialDevice():
                 
             if time.time() - t0 > timeout:
                 return []
+
+    def receive_string(self, timeout=10):
+        '''
+        Receives a string
+        '''
+        data = ''
+        while self.ser.in_waiting:
+            data += self.ser.read().decode(errors='ignore')
+        return data
+        
+    def shutdown(self):
+        try:
+            self.ser.close()
+            return None
+        except Exception as e:
+            return e
         
 
 if __name__ == '__main__':

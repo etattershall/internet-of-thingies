@@ -1,7 +1,7 @@
 import eventlet
 import json
 from flask import Flask, render_template
-from my_flask_mqtt import Mqtt
+from flask_mqtt import Mqtt
 from flask_socketio import SocketIO
 from flask_bootstrap import Bootstrap
 

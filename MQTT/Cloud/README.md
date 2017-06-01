@@ -26,16 +26,16 @@ Edit the config file in /etc/mosquitto/mosquitto.conf, adding the lines:
 - log_timestamp true
 - allow_anonymous true
 
-And run 
+And run
 - /sbin/ldconfig
 
 
-You can listen in on the status of the broker using 
+You can listen in on the status of the broker using
 - mosquitto_sub -t '$SYS/#' -v
 
-At this point, it is possible to publish/subscribe using 
+At this point, it is possible to publish/subscribe using
 - mosquitto_sub -h localhost -p 1883 -t test
-- mosquitto_sub -h localhost -p 1883 -t test -m 'Hello World'
+- mosquitto_pub -h localhost -p 1883 -t test -m 'Hello World'
 
 **Python**
 
@@ -64,11 +64,11 @@ client.on_message = on_message
 client.connect("localhost", 1883, 60)
 
 client.loop_forever()
-``` 
+```
 
 **Web frontend**
 
-Because I am a lazy person, we are going to use the Flask-MQTT module (https://github.com/MrLeeh/Flask-MQTT). 
+Because I am a lazy person, we are going to use the Flask-MQTT module (https://github.com/MrLeeh/Flask-MQTT).
 
 Run the commands:
 - sudo pip3 install Flask-MQTT
@@ -95,9 +95,9 @@ mqtt.client = Client(protocol=MQTTv31)
 mqtt.init_app(app)
 ```
 
-The app can be run with 
+The app can be run with
 - python3 app.py
 
-Point your browser to e.g. 
+Point your browser to e.g.
 - http://vm219.nubes.stfc.ac.uk:5000/
 to see the app in action.

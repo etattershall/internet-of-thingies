@@ -14,6 +14,7 @@ import serial
 import serial.tools.list_ports
 import time
 import re
+import sys
 
 __version__ = '0.0.1'
 
@@ -53,7 +54,8 @@ class SerialDevice():
     def connect(self, timeout=10):
         try:
             self.ser = serial.Serial(self.comport, 9600, timeout=timeout)
-            self.ser.nonblocking()
+            if not sys.platform.startswith('win'):
+                self.ser.nonblocking()
             return None
         except Exception as e:
             return e
@@ -109,6 +111,15 @@ class SerialDevice():
             data += self.ser.read().decode(errors='ignore')
         return data
     
+    def ready(self):
+        '''
+        Check if the device is ready to send
+        '''
+        if self.ser.in_waiting > 0:
+            return True
+        else:
+            return False
+            
     def handshake_request(self):
         '''
         Can be sent at any time by the smart agent to the arduino. 

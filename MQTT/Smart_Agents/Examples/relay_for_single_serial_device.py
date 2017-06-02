@@ -18,11 +18,16 @@ def on_message(client, userdata, message):
         # Locate the appropriate edge device
         destination_id = message.topic.split('/')[2]
         for arduino in arduinos:
-            if device.id == destination_id:
-                # Locate the appropriate sensor
-                print(message.topic.split('/')[4])
-                device.update(message.topic.split('/')[4], message.payload)
-                
+            if str(arduino.id) == str(destination_id):
+                # Relay the message to the arduino
+                relay = {
+                         'topic': message.topic.split('/')[4],
+                         'payload': message.payload
+                         }
+                # Send the message
+                flag = arduino.send(relay)
+                if flag:
+                    raise flag
                 
     # Relay the message to the arduino
     if arduino != None:
@@ -84,18 +89,20 @@ for arduino in arduinos:
         raise flag
 
 # Wait for a response, then set the names of the arduinos
-ready_to_read, ready_to_write, ready_with_errors = select.select(arduinos, [], [])
-for ready_arduino in ready_to_read:
-    message = ready_arduino.receive_json()
-    if message == '':
-        pass
-    elif message["topic"] == "handshake":
-        print(message)
-        ready_arduino.name = message["payload"]
+responded = 0
+while responded < len(arduinos):
+    for arduino in arduinos:
+        if arduino.ready():
+            message = arduino.receive_json()
+            if message != '':
+                if message["topic"] == "handshake":
+                    print(message)
+                    arduino.name = message["payload"]
+                    responded += 1
             
 # Request subscriptions to communications to the attached arduinos
 for arduino in arduinos:
-    client.subscribe(smart_agent_name + '/public/' + arduino.name + '/output/#', qos=1)
+    client.subscribe(smart_agent_name + '/public/' + str(arduino.name) + '/output/#', qos=1)
 
 # Start a new thread to process network traffic.
 client.loop_start()
@@ -103,15 +110,11 @@ try:
     # Receive data
     while True:
         # Wait for a device to be ready
-        ready_to_read, ready_to_write, ready_with_errors = select.select(arduinos, [], [])
-        for ready_arduino in ready_to_read:
-            message = ready_arduino.receive_json()
-
-            if message == '':
-                pass
-            else:
-                # If successful, publish the message
-                client.publish(smart_agent_name + '/public/' + str(ready_arduino.name) +'/input/' + message["topic"], 
+            for arduino in arduinos:
+                if arduino.ready():
+                    message = arduino.receive_json()
+                    if message != '':
+                        client.publish(smart_agent_name + '/public/' + str(arduino.name) +'/input/' + message["topic"], 
                                message["payload"], qos=1)
 
 except Exception as e:
@@ -120,4 +123,4 @@ except Exception as e:
 finally:
     for arduino in arduinos:
         arduino.shutdown()
-        print('Shutdown was successful')
+    print('Shutdown was successful')

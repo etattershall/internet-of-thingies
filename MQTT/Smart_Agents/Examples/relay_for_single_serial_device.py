@@ -18,26 +18,17 @@ def on_message(client, userdata, message):
         # Locate the appropriate edge device
         destination_id = message.topic.split('/')[2]
         for arduino in arduinos:
-            if str(arduino.id) == str(destination_id):
+            if str(arduino.name) == str(destination_id):
                 # Relay the message to the arduino
                 relay = {
                          'topic': message.topic.split('/')[4],
-                         'payload': message.payload
+                         'payload': message.payload.decode()
                          }
                 # Send the message
                 flag = arduino.send(relay)
                 if flag:
                     raise flag
-                
-    # Relay the message to the arduino
-    if arduino != None:
-        relay = {
-        'topic': 'led', 
-        'payload': message.payload.decode()
-        }
-        flag = arduino.send(relay)
-        if flag:
-            raise flag
+
 
 def on_publish(client, userdata, mid):
     pass

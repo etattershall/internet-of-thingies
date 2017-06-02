@@ -45,6 +45,13 @@ void loop() {
       // If parsing was successful...
       if (incoming_message.success()) {
         // Do what the message says!
+        if (incoming_message["topic"] == "handshake"){
+          // Send back a handshake
+          JsonObject& outgoing_message = jsonBuffer.createObject();
+          outgoing_message["topic"] = "handshake";
+          outgoing_message["payload"] = device_id;
+          outgoing_message.printTo(Serial);
+        }
         if (incoming_message["topic"] == "led" && incoming_message["payload"] == "HIGH"){
           digitalWrite(LED, HIGH);
         }
@@ -66,8 +73,6 @@ void loop() {
       // Send data about our sensor
       int sensor_state = analogRead(SENSOR);
       JsonObject& outgoing_message = jsonBuffer.createObject();
-      outgoing_message["source"] = device_id;
-      outgoing_message["type"] = "pub";
       outgoing_message["topic"] = "LDR";
       outgoing_message["payload"] = sensor_state;
       outgoing_message.printTo(Serial);

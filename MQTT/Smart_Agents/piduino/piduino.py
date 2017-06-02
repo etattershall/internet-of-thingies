@@ -53,6 +53,7 @@ class SerialDevice():
     def connect(self, timeout=10):
         try:
             self.ser = serial.Serial(self.comport, 9600, timeout=timeout)
+            self.ser.nonblocking()
             return None
         except Exception as e:
             return e
@@ -107,7 +108,35 @@ class SerialDevice():
         while self.ser.in_waiting:
             data += self.ser.read().decode(errors='ignore')
         return data
+    
+    def handshake_request(self):
+        '''
+        Can be sent at any time by the smart agent to the arduino. 
+        If the arduino receives it, it should respond with a message in the
+        format:
+            {
+                 'topic': 'handshake',
+                 'source': Arduino ID number,
+                 'payload': 'Hello'
+            }
+        '''
+        message = {
+        'topic': 'handshake', 
+        'payload': 'Hello'
+        }
+        return self.send(message)
         
+    def flush(self):
+        '''
+        Flushes the serial buffer
+        '''
+        try:
+            self.ser.flushInput()
+            self.ser.flushOutput()
+            return None
+        except Exception as e:
+            return e
+
     def shutdown(self):
         try:
             self.ser.close()

@@ -57,7 +57,7 @@ if flag:
 time.sleep(4)
 
 # Request a subscriptrion to test/webapp
-client.subscribe('test/webapp/#', qos=1)
+client.subscribe('TestPi/public/#', qos=1)
 
 # Start a new thread to process network traffic.
 client.loop_start()
@@ -71,9 +71,11 @@ try:
         else:
             # If successful, publish the message
             if message["type"] == "pub":
-                client.publish('test/arduino/' + message["topic"], message["payload"], qos=1)
+                client.publish('TestPi/public/' + str(message["source"]) +'/input/' + message["topic"], 
+                               message["payload"], qos=1)
 
 except Exception as e:
     raise e
 finally:
     arduino.shutdown()
+    print('Shutdown was successful')

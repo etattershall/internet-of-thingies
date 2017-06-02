@@ -56,7 +56,7 @@ class SerialDevice():
             return None
         except Exception as e:
             return e
-    
+        
     def fileno(self):
         if self.ser != None:
             return self.ser.fileno()

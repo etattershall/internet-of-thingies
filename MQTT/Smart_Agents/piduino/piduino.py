@@ -11,6 +11,7 @@ application
 
 import json
 import serial
+from serial import SerialException
 import serial.tools.list_ports
 import time
 import re
@@ -22,11 +23,16 @@ class NotYetImplemented(Exception):
     def __init__(self, value):
         self.value = value
 
-class NotConnected(Exception):
+
+class AuthenticationError(Exception):
     def __init__(self, value):
         self.value = value
 
-class AuthenticationError(Exception):
+class ReadTimeoutError(Exception):
+    def __init__(self, value):
+        self.value = value
+     
+class NotConnectedError(Exception):
     def __init__(self, value):
         self.value = value
         
@@ -47,24 +53,23 @@ class SerialDevice():
     '''
     def __init__(self, comport):
         self.name = None
-        self.subscriptions = None
         self.comport = comport
         self.ser = None
+        self.topics = set()
+        self.connected = False
+        self.verified = False
+        self.processing = False
+        self.error = False
         
     def connect(self, timeout=10):
         try:
             self.ser = serial.Serial(self.comport, 9600, timeout=timeout)
+            self.connected = True
             if not sys.platform.startswith('win'):
                 self.ser.nonblocking()
             return None
         except Exception as e:
             return e
-        
-    def fileno(self):
-        if self.ser != None:
-            return self.ser.fileno()
-        else:
-            raise NotConnected("Need to connect first!")
         
     def send(self, message):
         packet = json.dumps(message).encode('ascii')
@@ -82,7 +87,10 @@ class SerialDevice():
         data = ''
         while True:
             # We read one byte at a time.
-            data += self.ser.read().decode(errors='ignore')
+            try:
+                data += self.ser.read().decode(errors='ignore')
+            except SerialException as e:
+                return NotConnectedError("The device is not connected"), ''
             # Note: this program cannot cope with internal '{}' brackets inside the json, so be sure not
             # to use them in the plaintext when composing a message!
             potential_messages = re.findall('\{[^\{\}]+\}', data)
@@ -92,7 +100,7 @@ class SerialDevice():
                     # json loads is a bit of a blunt instrument. It will interpret "hi" as a 
                     # jsonic object! 
                     if type(message) == dict:
-                        return message
+                        return None, message
 
                 except Exception as e:
                     # Exceptions occur when the message is incomplete. Therefore we
@@ -100,7 +108,7 @@ class SerialDevice():
                     pass
                 
             if time.time() - t0 > timeout:
-                return []
+                return ReadTimeoutError("The timeout was reached before a valid message was read"), ''
 
     def receive_string(self, timeout=10):
         '''
@@ -115,10 +123,13 @@ class SerialDevice():
         '''
         Check if the device is ready to send
         '''
-        if self.ser.in_waiting > 0:
-            return True
-        else:
-            return False
+        try:
+            if self.ser.in_waiting > 0:
+                return None, True
+            else:
+                return None, False
+        except SerialException as e:
+            return NotConnectedError("The device is not connected"), False
             
     def handshake_request(self):
         '''

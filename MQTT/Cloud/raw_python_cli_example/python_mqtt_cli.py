@@ -15,6 +15,7 @@ Expected Response:
 
 import paho.mqtt.client as Mqtt
 
+
 def run():
     """Sets up an mqtt client, registers the handlers and starts a
     threaded loop."""
@@ -33,6 +34,7 @@ def handle_connect(thisClient, userdata, rc):
     if rc != 0:
         raise IOError("Connection returned result: " + Mqtt.connack_string(rc))
     thisClient.subscribe("#")
+
 
 def handle_message(client, userdata, msg):
     """On message recieved, print it out to the console."""
@@ -55,5 +57,5 @@ if __name__ == "__main__":
     running = True
     runningClient = run()  # Setup and run the client.
 
-    while running == True:
+    while running is True:
         basic_send()  # Read then send messages from the console.

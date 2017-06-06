@@ -41,8 +41,6 @@ TOPIC_DISCONNECT_GRACE = TOPIC_DISCONNECT + "/graceful"
 TOPIC_DISCONNECT_UNGRACE = TOPIC_DISCONNECT + "/ungraceful"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
 
-# The current list of connected clients
-connectedSmartAgents = set()
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 
@@ -50,12 +48,23 @@ logging.basicConfig(level=logging.INFO)
 def run():
     """Sets up an mqtt client, registers the handlers and starts a
     threaded loop."""
+    global connectedSmartAgents
+    global shouldBeConnected
+    global messagesInTransit
+    connectedSmartAgents = set()  # Current list of connected Smart Agents
+    shouldBeConnected = True      # Set to false before graceful disconnect
+    # Create a dict of the mid of each message that has been sent with
+    # client.publish() but has not had its callack (on_publish).
+    # The value is (topic, payload).
+    messagesInTransit = dict()
+
     # Use this protocol version to suit the particular broker..
     client = Mqtt.Client(protocol=Mqtt.MQTTv31)
 
     # Register client callbacks (prefix handle)
     client.on_connect = handle_connect
     client.on_disconnect = handle_disconnect
+    client.on_publish = handle_publish
 
     # Register message callbacks (prefix on)
     client.on_message = on_unhandled_message
@@ -72,6 +81,15 @@ def run():
     return client
 
 
+def stop(client):
+    """Stops the connection to the MQTT broker. This is mainly implemented for
+    testing purposes as there shouldn't be any reason to stop the service.
+    """
+    global shouldBeConnected
+    shouldBeConnected = False  # tell the callback that this isn't an error
+    client.disconnect()
+
+
 def handle_connect(client, userdata, rc):
     """After connection with MQTT broker established, check for errors and
     subscribe to topics."""
@@ -84,14 +102,35 @@ def handle_connect(client, userdata, rc):
     client.subscribe(TOPIC_ROOT + "/#")
 
 
+def handle_publish(client, userdata, mid):
+    """Called when a publish handshake is finished (depending on the qos)"""
+    if mid not in messagesInTransit:
+        logging.error("Message with mid: {} was not in transit but was "
+                      "passed to handle_publish.")
+        return
+    topic, payload = messagesInTransit[mid]
+    if topic == TOPIC_DISCOVERY:
+        logging.info("Successfully published to discovery.")
+
+
 def handle_subscribe():
     # TODO: Handle subscription success, at least with logging info.
     pass
 
 
+class MQTTDisconnectError(RuntimeError):
+    """Raised when disconnected from MQTT while shouldBeConnected is set to
+    True. In other words, the disconnection was expected."""
+
+
 def handle_disconnect(mqttClient, userdata, rc):
-    # TODO: Perhaps retry here instead of giving up?
-    raise Exception("Should not be disconnected from MQTT.")
+    """Callback when disconnected from MQTT broker"""
+    if shouldBeConnected:
+        logging.warning("Disconnected from MQTT.")
+        raise MQTTDisconnectError()
+    else:
+        mqttClient.loop_stop()
+        logging.info("Disconnected from MQTT.")
 
 
 class UnexpectedMessage(NotImplementedError):
@@ -123,7 +162,7 @@ def on_grace_disconnect(mqttClient, userdata, msg):
     """Callback when a smart agent publishes to TOPIC_DISCONNECT_GRACE, aka
     when they want to disconnect."""
     if msg.retain:  # Skip old retained messages.
-        logging.info("Skipping retained message.")
+        logging.debug("Skipping retained message.")
         return
     if len(msg.payload) == 0:
         logging.warning("Smart Agent didn't send id to disconnect.")
@@ -142,6 +181,9 @@ def on_grace_disconnect(mqttClient, userdata, msg):
 def on_ungrace_disconnect(mqttClient, userdata, msg):
     """Could do something with unexpected disconnect here. For the moment,
     just do the same as if it was a graceful disconnect."""
+    if msg.retain:  # Skip old retained messages.
+        logging.debug("Skipping retained message.")
+        return
     logging.warning("Ungraceful disconnect from smart agent with id: {}"
                     .format(msg.payload.decode()))
     on_grace_disconnect(mqttClient, userdata, msg)
@@ -151,14 +193,14 @@ def on_connect(mqttClient, userdata, msg):
     """Callback when a smart agent and publishes to TOPIC_CONNECT
     with it's agentID."""
     if msg.retain:  # Skip retained messages, they must be old.
-        logging.info("Skipping retained message.")
+        logging.debug("Skipping retained message.")
         return
     if len(msg.payload) == 0:
         logging.warning("Smart Agent didn't send id to connect.")
     agentID = msg.payload.decode()
     if agentID in connectedSmartAgents:
         logging.warning("Smart Agent: {} registered to connect but is already "
-                        "recorded as connected.")
+                        "recorded as connected.".format(agentID))
         return
     connectedSmartAgents.add(agentID)  # Add to set -> auto remove DUP
     logging.info("Added Smart Agent with id: {}".format(agentID))
@@ -171,18 +213,20 @@ def updateDiscovery(mqttClient):
     Must pass in the mqttClient instance as returned from run() or passed into
     a message callback."""
     # Ensure that this get sent so use qos=1. Duplicates shouldn't matter.
-    result, mid = mqttClient.publish(TOPIC_DISCOVERY,
-                                     json.dumps(list(connectedSmartAgents)),
-                                     qos=1, retain=True)
-    if result == Mqtt.MQTT_ERR_SUCCESS:
-        # This is always true if the client is not disconnected.
-        # TODO: A callback should be used to check that the message has been
-        #       recieved (qos=1) by the broker instead.
-        logging.info("Successfully published to discovery.")
-        logging.info("Currently my record of connected Smart Agents is: {}"
-                     .format(connectedSmartAgents))
-    else:
-        raise Exception("Should not ")
+    trackedPublish(mqttClient, TOPIC_DISCOVERY,
+                   json.dumps(list(connectedSmartAgents)), qos=1, retain=True)
+    logging.debug("Connected Smart Agents: {}".format(connectedSmartAgents))
+
+
+def trackedPublish(mqttClient, topic, payload=None, **kwargs):
+    """A wrapper for mqttClient.publish() that adds a tuple of (topic,
+    content) by mid to the 'messagesInTransit' dictionary so that they can be
+    tracked in the handle_publish callback. It also raises an error if the
+    client is disconnected because it shouldn't be."""
+    result, mid = mqttClient.publish(topic, payload=payload, **kwargs)
+    if result != Mqtt.MQTT_ERR_SUCCESS:
+        raise Exception("Should not be disconnected")
+    messagesInTransit[mid] = (topic, payload)
 
 
 if __name__ == "__main__":

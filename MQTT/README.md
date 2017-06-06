@@ -5,7 +5,9 @@
 
 ## Current thoughts on topics
 ```
-broker-services/disconnect/...
+broker-services/disconnect/graceful
+                          /ungraceful
+               /connect
                /discover
                /(other functions...)
 PI1/public/arduino1/input/sensor1 (eg for LED write 1/0 to toggle on/off)

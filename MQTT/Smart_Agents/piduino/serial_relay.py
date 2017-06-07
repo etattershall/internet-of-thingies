@@ -188,7 +188,7 @@ except Exception as e:
     
 finally:
     #client.disconnect()
-
+    client.publish(smart_agent_name + '/private/log', 'Disconnecting', qos=1)
     for arduino in devices:
         try:
             arduino.shutdown()

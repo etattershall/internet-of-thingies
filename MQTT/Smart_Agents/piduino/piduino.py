@@ -129,13 +129,13 @@ class SerialDevice():
         Check if the device is ready to send
         '''
         try:
-            if float(serial.VERSION) >= 3:
-                if self.ser.in_waiting > 0:
+            if serial.VERSION.startswith('2'):
+                if self.ser.inWaiting() > 0:
                     return None, True
                 else:
                     return None, False
             else:
-                if self.ser.inWaiting() > 0:
+                if self.ser.in_waiting > 0:
                     return None, True
                 else:
                     return None, False     

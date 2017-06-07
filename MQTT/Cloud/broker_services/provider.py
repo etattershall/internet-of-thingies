@@ -1,6 +1,9 @@
 """
 Runs an mqtt client that provides broker services.
 
+Usage
+
+
 Services
 --------
 Discovery:
@@ -12,18 +15,23 @@ Discovery:
 
 
 Smart Agent Setup
-------------
-Connect / Disconnect:
+-----------------
+Connect:
+    - All smart agents should publish their ID on TOPIC_CONNECT immediately
+      after connecting.
+
+Disconnect:
     - All smart agents must post their ID on TOPIC_DISCONNECT_GRACE before
-      gracefully disconnecting.
+      gracefully disconnecting. Ideally this shouldn't be a retained message.
     - All smart agents must set their will to post their ID on
-      TOPIC_DISCONNECT_UNGRACE.
+      TOPIC_DISCONNECT_UNGRACE (again, not retained).
 
 
 """
 import paho.mqtt.client as Mqtt
 import json
 import logging
+import time
 
 HOSTNAME = "localhost"
 PORT = 1883
@@ -51,6 +59,7 @@ def run():
     global connectedSmartAgents
     global shouldBeConnected
     global messagesInTransit
+    global connected
     connectedSmartAgents = set()  # Current list of connected Smart Agents
     shouldBeConnected = True      # Set to false before graceful disconnect
     # Create a dict of the mid of each message that has been sent with
@@ -81,18 +90,43 @@ def run():
     return client
 
 
-def stop(client):
+def stop(client, finishMessages=False, sync=False, timeout=3):
     """Stops the connection to the MQTT broker. This is mainly implemented for
     testing purposes as there shouldn't be any reason to stop the service.
+
+    If the finishMessages flag is True this will wait all messagesInTransit to
+    leave before disconnecting.
+
+    If the sync flag is True, this will wait until handle_disconnect sets
+    the global connected variable to false.
+
+    For both those waits, after timeout seconds a RuntimeError is raised.
     """
+    if finishMessages:
+        after = time.time() + timeout
+        while time.time() < after:
+            if not len(messagesInTransit) > 0:
+                break
+        else:
+            raise RuntimeError("Timeout expired while waiting for messages "
+                               "to finish sending.")
     global shouldBeConnected
     shouldBeConnected = False  # tell the callback that this isn't an error
     client.disconnect()
+    if sync:
+        after = time.time() + timeout
+        while time.time() < after:
+            if not connected:
+                return
+        else:
+            raise RuntimeError("Timeout expired while waiting for disconnect.")
 
 
 def handle_connect(client, userdata, rc):
     """After connection with MQTT broker established, check for errors and
     subscribe to topics."""
+    global connected
+    connected = True
     if rc != 0:
         raise IOError("Connection returned result: " + Mqtt.connack_string(rc))
     logging.info("Connection to MQTT broker succeeded.")
@@ -111,6 +145,7 @@ def handle_publish(client, userdata, mid):
     topic, payload = messagesInTransit[mid]
     if topic == TOPIC_DISCOVERY:
         logging.info("Successfully published to discovery.")
+    del messagesInTransit[mid]
 
 
 def handle_subscribe():
@@ -125,6 +160,8 @@ class MQTTDisconnectError(RuntimeError):
 
 def handle_disconnect(mqttClient, userdata, rc):
     """Callback when disconnected from MQTT broker"""
+    global connected
+    connected = False
     if shouldBeConnected:
         logging.warning("Disconnected from MQTT.")
         raise MQTTDisconnectError()
@@ -225,7 +262,7 @@ def trackedPublish(mqttClient, topic, payload=None, **kwargs):
     client is disconnected because it shouldn't be."""
     result, mid = mqttClient.publish(topic, payload=payload, **kwargs)
     if result != Mqtt.MQTT_ERR_SUCCESS:
-        raise Exception("Should not be disconnected")
+        raise RuntimeError("Should not be disconnected")
     messagesInTransit[mid] = (topic, payload)
 
 

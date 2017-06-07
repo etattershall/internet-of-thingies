@@ -39,10 +39,15 @@ class NotConnectedError(Exception):
 def comport_scan(device_type='Arduino'):
     # Returns a list of com ports connected to arduinos
     matching_ports = []
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        if port.description.startswith(device_type):
-            matching_ports.append(port.device)
+    if sys.platform.startswith('win'):
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            if port.description.startswith(device_type):
+                matching_ports.append(port.device)
+    elif sys.platform.startswith('linux'):
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            matching_ports.append(port[0])
     return matching_ports
     
     
@@ -124,10 +129,16 @@ class SerialDevice():
         Check if the device is ready to send
         '''
         try:
-            if self.ser.in_waiting > 0:
-                return None, True
+            if float(serial.VERSION) >= 3:
+                if self.ser.in_waiting > 0:
+                    return None, True
+                else:
+                    return None, False
             else:
-                return None, False
+                if self.ser.inWaiting() > 0:
+                    return None, True
+                else:
+                    return None, False     
         except SerialException as e:
             return NotConnectedError("The device is not connected"), False
             

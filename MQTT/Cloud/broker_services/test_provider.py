@@ -112,15 +112,29 @@ class SmartAgent():
 
 
 def test_run():
-    """Tests that a client is setup and that handle_connect returns within 1
-    second logging that it succeeded."""
+    """Tests that a client is setup and that handle_connect is called logging a
+    connection to the broker."""
     try:
         with LogCapture() as l:
             p = provider.run()
             l.check(("root", "INFO", "Connecting to MQTT broker..."),
                     ("root", "INFO", "Connection to MQTT broker succeeded."))
-            # TODO: Test subscribe
+    finally:
+        provider.stop(p)
 
+
+def test_subscribe():
+    """Tests that the client manages to subscribe after calling run."""
+    timeout = time.time() + 3
+    try:
+        with LogCapture() as l:
+            p = provider.run()
+            while time.time() < timeout:
+                logMessages = set(r.msg for r in l.records)
+                if "Subscribed to a topic with mid: 1" in logMessages:
+                    break
+            else:
+                raise Exception("Timeout ended before subscription callback.")
     finally:
         provider.stop(p)
 
@@ -156,6 +170,7 @@ def test_connect_disconnect():
         # log messages) is unknown.
         assert "Connecting to MQTT broker..." in logMessages
         assert "Connection to MQTT broker succeeded." in logMessages
+        assert "Subscribed to a topic with mid: 1" in logMessages
         assert "Added Smart Agent with id: Id" in logMessages
         assert "Successfully published to discovery." in logMessages
         assert "Removed Smart Agent with id: Id" in logMessages

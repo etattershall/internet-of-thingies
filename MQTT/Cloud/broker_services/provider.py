@@ -32,6 +32,10 @@ import paho.mqtt.client as Mqtt
 import json
 import logging
 import time
+from sys import version_info
+
+assert version_info >= (3, 0)
+
 
 HOSTNAME = "localhost"
 PORT = 1883
@@ -74,6 +78,7 @@ def run():
     client.on_connect = handle_connect
     client.on_disconnect = handle_disconnect
     client.on_publish = handle_publish
+    client.on_subscribe = handle_subscribe
 
     # Register message callbacks (prefix on)
     client.on_message = on_unhandled_message
@@ -148,9 +153,9 @@ def handle_publish(client, userdata, mid):
     del messagesInTransit[mid]
 
 
-def handle_subscribe():
-    # TODO: Handle subscription success, at least with logging info.
-    pass
+def handle_subscribe(client, userdata, mid, granted_qos):
+    """Called after the MQTT client successfully subscribes to a topic."""
+    logging.info("Subscribed to a topic with mid: {}".format(mid))
 
 
 class MQTTDisconnectError(RuntimeError):

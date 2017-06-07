@@ -6,7 +6,7 @@ import pytest
 import provider
 import paho.mqtt.client as Mqtt
 import time
-from testfixtures import log_capture, LogCapture
+from testfixtures import LogCapture
 import logging
 
 
@@ -111,14 +111,61 @@ class SmartAgent():
         self.client.disconnect()
 
 
-@log_capture(level=logging.INFO)
-def test_run(l):
+def test_run():
     """Tests that a client is setup and that handle_connect returns within 1
     second logging that it succeeded."""
     try:
-        p = provider.run()
-        l.check(("root", "INFO", "Connecting to MQTT broker..."),
-                ("root", "INFO", "Connection to MQTT broker succeeded."))
-        # TODO: Test subscribe
+        with LogCapture() as l:
+            p = provider.run()
+            l.check(("root", "INFO", "Connecting to MQTT broker..."),
+                    ("root", "INFO", "Connection to MQTT broker succeeded."))
+            # TODO: Test subscribe
+
     finally:
         provider.stop(p)
+
+
+def test_connect_disconnect():
+    """Tests that a connection and disconnection doesn't raise errors. Under
+    the different options of retaining and not retaining messages or being
+    graceful and ungraceful."""
+    for option in range(8):
+        graceful = bool(option & 1)
+        retainConnect = bool(option & 2)
+        retainDisconnect = bool(option & 4)
+        with LogCapture() as l:
+            try:
+                p = provider.run()
+                sa = SmartAgent("Id")
+                sa.setup()
+                # Wait for the two messages to be published before advancing
+                sa.wait(sa.registerConnect(retain=retainConnect))
+                sa.wait(sa.registerDisconnect(retain=retainDisconnect,
+                                              graceful=graceful))
+                # Crudely wait here for provider to recieve the messages from
+                # the broker.
+                time.sleep(1)
+            finally:
+                sa.disconnect()
+                provider.stop(p, finishMessages=True, sync=True)
+
+        logMessages = set(r.msg for r in l.records)
+        logLevels = list(r.levelno for r in l.records)
+        # Use assert + l.records rather than the check() function because
+        # the order that these messages will come (including perhaps other
+        # log messages) is unknown.
+        assert "Connecting to MQTT broker..." in logMessages
+        assert "Connection to MQTT broker succeeded." in logMessages
+        assert "Added Smart Agent with id: Id" in logMessages
+        assert "Successfully published to discovery." in logMessages
+        assert "Removed Smart Agent with id: Id" in logMessages
+        assert "Successfully published to discovery." in logMessages
+        assert "Disconnected from MQTT." in logMessages
+        if graceful:
+            assert all(l <= logging.INFO for l in logLevels)
+        if not graceful:
+            assert ('Ungraceful disconnect from smart agent '
+                    'with id: Id') in logMessages
+            assert all(l <= logging.WARN for l in logLevels)
+            assert logLevels.count(logging.WARN) == 1
+        l.uninstall()

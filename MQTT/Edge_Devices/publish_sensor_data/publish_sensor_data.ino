@@ -100,7 +100,7 @@ void loop() {
       
       // Send data about each sensor
       for (int i=0; i<sizeof(digital_inputs); i++) {
-        int sensor_state = digitalRead(SENSOR);
+        int sensor_state = digitalRead(digital_inputs[i]);
         JsonObject& outgoing_message = jsonBuffer.createObject();
         outgoing_message["topic"] = digital_inputs_names[i];
         outgoing_message["payload"] = sensor_state;
@@ -109,7 +109,7 @@ void loop() {
 
       // Send data about each sensor
       for (int i=0; i<sizeof(analog_inputs); i++) {
-        int sensor_state = analogRead(SENSOR);
+        int sensor_state = analogRead(analog_inputs[i]);
         JsonObject& outgoing_message = jsonBuffer.createObject();
         outgoing_message["topic"] = analog_inputs_names[i];
         outgoing_message["payload"] = sensor_state;

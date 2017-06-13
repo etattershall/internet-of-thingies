@@ -9,6 +9,7 @@ import time
 from testfixtures import LogCapture
 import logging
 import json
+import socket
 
 
 class SmartAgent():
@@ -54,7 +55,6 @@ class SmartAgent():
         # TODO: Set qos here?
         self.client.will_set(provider.TOPIC_DISCONNECT_UNGRACE,
                              payload=self.agentID)
-        self.wantToBeConnected = True
         # Add callback when provider posts list of connected clients
         self.client.message_callback_add(provider.TOPIC_DISCOVERY,
                                          self._handle_discover_message)
@@ -80,10 +80,7 @@ class SmartAgent():
     def _handle_disconnect(self, client, userdata, rc):
         """Callback after disconnection."""
         self.connected = False
-        if self.wantToBeConnected:
-            raise Exception("Shouldn't be disconnected here!")
-        else:
-            self.client.loop_stop()
+        self.client.loop_stop()
 
     def _handle_publish(self, client, userdata, mid):
         """Record messages that have been published"""
@@ -119,7 +116,6 @@ class SmartAgent():
     def disconnect(self):
         """Sends disconnect message and closes the connection. Doesn't post
         the will. Reconnect with client.reconnect()."""
-        self.wantToBeConnected = False
         self.client.disconnect()
 
 
@@ -250,26 +246,35 @@ def test_unhandled_message():
 
 
 def test_last_will():
+    """Tests that shutting down the underlying socket causes the last will to
+    be sent."""
+    p = provider.run()
     try:
-        # p = provider.run()
-
         # Create a Smart Agent that will register connection with a will
         # and then disconnect
         sa = SmartAgent("Id1")
         sa.setup()
-        # Create another Smart Agent which broker-services doesn't know about
-        # to observe the will being published
-        observer = SmartAgent("Id2")
-        observer.setup()
-
         sa.wait(sa.registerConnect())
 
-        input("Ctl-C to Ungraceful disconnect")
+        with LogCapture() as l:
+            # Close the MQTT socket, forcing unexpected disconnect
+            soc = sa.client.socket()
+            soc.shutdown(socket.SHUT_RDWR)
+
+            # Wait for disconnection
+            timeout = time.time() + 3
+            while time.time() < timeout:
+                if sa.connected is False:
+                    break
+            else:
+                raise RuntimeError("Exceeded timeout on disconnect.")
+            # Wait for provider to register ungraceful disconnect
+            time.sleep(1)
+        logMessages = list(r.msg for r in l.records)
+        logLevels = list(r.levelno for r in l.records)
+        assert logMessages.count("Ungraceful disconnect from smart "
+                                 "agent with id: Id1") == 1
+        assert logMessages.count("Removed Smart Agent with id: Id1") == 1
+        assert logLevels.count(logging.WARN) == 1
     finally:
-        observer.disconnect()
-        # provider.stop(p)
-
-
-if __name__ == "__main__":
-    "Test last will this way for the moment - human ctl-C is required"
-    test_last_will()
+        provider.stop(p)

@@ -175,12 +175,6 @@ def handle_disconnect(mqttClient, userdata, rc):
         logging.info("Disconnected from MQTT.")
 
 
-class UnexpectedMessage(NotImplementedError):
-    """Raised when a message to TOPIC_ROOT isn't expected so there isn't a
-    custom callback."""
-    pass
-
-
 def on_unhandled_message(mqttClient, userdata, msg):
     """Callback on message recieved, not handled by a specific callback. This
     function raises an error if this is unexpected or ignores the message if
@@ -195,9 +189,9 @@ def on_unhandled_message(mqttClient, userdata, msg):
         TOPIC_DISCOVERY + "/#"
     ]
     if not any(Mqtt.topic_matches_sub(sub, msg.topic) for sub in subsToIgnore):
-        raise UnexpectedMessage("Unexpected message recieved at topic [{}] "
-                                "with payload [{}].".format(msg.topic,
-                                                            msg.payload))
+        logging.warning("Unexpected message recieved at topic [{}] "
+                        "with payload [{}].".format(msg.topic,
+                                                    msg.payload))
 
 
 def on_grace_disconnect(mqttClient, userdata, msg):

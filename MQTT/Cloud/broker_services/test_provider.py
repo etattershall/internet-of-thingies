@@ -184,3 +184,50 @@ def test_connect_disconnect():
             assert all(l <= logging.WARN for l in logLevels)
             assert logLevels.count(logging.WARN) == 1
         l.uninstall()
+
+
+def test_unhandled_message():
+    """Tests that messages to TOPIC_ROOT which aren't expected are logged"""
+    test_topics = [
+        provider.TOPIC_ROOT,
+        provider.TOPIC_DISCONNECT,  # Disonnect without grace/ungrace
+        provider.TOPIC_ROOT + "/somethingRandom",
+        # Truncated
+        provider.TOPIC_ROOT + "/connec",
+        provider.TOPIC_ROOT + "/disonnect/gracefu",
+        provider.TOPIC_ROOT + "/disconnect/ungracefu",
+        provider.TOPIC_ROOT + "/connectANDEXTRA",
+        provider.TOPIC_ROOT + "/EXTRAANDconnect",
+        provider.TOPIC_DISCONNECT + "/gracefulANDEXTRA",
+        provider.TOPIC_DISCONNECT + "/EXTRAANDgraceful",
+        provider.TOPIC_DISCONNECT + "/ungracefulANDEXTRA",
+        provider.TOPIC_DISCONNECT + "/ANDEXTRAungraceful"
+    ]
+    test_payload = b"payload"
+    try:
+        p = provider.run()
+        sa = SmartAgent("Id")
+        sa.setup()
+        mids = []  # List of mids to wait for publish
+        with LogCapture() as l:
+            for topic in test_topics:
+                result, mid = sa.client.publish(topic,
+                                                test_payload, qos=2)
+                assert result == Mqtt.MQTT_ERR_SUCCESS
+                mids.append(mid)
+            for mid in mids:
+                sa.wait(mid)   # Wait for all the messages to be published
+            # Wait for the provider to deal with the published messages
+            time.sleep(1)
+        logMessages = set(r.msg for r in l.records)
+        logLevels = list(r.levelno for r in l.records)
+        assert all(l <= logging.WARN for l in logLevels)
+        toFormat = ("Unexpected message recieved at topic [{}] with "
+                    "payload [{}].")
+        expectedMessages = set(toFormat.format(topic, test_payload)
+                               for topic in test_topics)
+        assert all(expected in logMessages for expected in expectedMessages)
+        assert logLevels.count(logging.WARN) == len(expectedMessages)
+    finally:
+        sa.disconnect()
+        provider.stop(p)

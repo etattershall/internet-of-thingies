@@ -218,9 +218,9 @@ def test_unhandled_message():
         provider.TOPIC_DISCONNECT_GRACE + "/extraTopicLevel"
     ]
     test_payload = b"payload"
+    p = provider.run()
+    sa = SmartAgent("Id")
     try:
-        p = provider.run()
-        sa = SmartAgent("Id")
         sa.setup()
         mids = []  # List of mids to wait for publish
         with LogCapture() as l:

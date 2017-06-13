@@ -57,9 +57,11 @@ TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
 logging.basicConfig(level=logging.INFO)
 
 
-def run():
+def run(sync=False):
     """Sets up an mqtt client, registers the handlers and starts a
-    threaded loop."""
+    threaded loop. If the sync flag is set then client.loop() will have to
+    be called manually outside of this function as a threaded loop isn't
+    created."""
     global connectedSmartAgents
     global shouldBeConnected
     global messagesInTransit
@@ -91,7 +93,8 @@ def run():
 
     logging.info("Connecting to MQTT broker...")
     client.connect(HOSTNAME, port=PORT)
-    client.loop_start()  # Start a threaded loop in the background.
+    if not sync:
+        client.loop_start()  # Start a threaded loop in the background.
     return client
 
 
@@ -168,7 +171,7 @@ def handle_disconnect(mqttClient, userdata, rc):
     global connected
     connected = False
     if shouldBeConnected:
-        logging.warning("Disconnected from MQTT.")
+        logging.error("Disconnected from MQTT.")
         raise MQTTDisconnectError()
     else:
         mqttClient.loop_stop()

@@ -124,7 +124,9 @@ def test_run():
     connection to the broker."""
     try:
         with LogCapture() as l:
-            p = provider.run()
+            p = provider.run(sync=True)
+            time.sleep(0.1)  # Sleep for mosquitto to respond
+            p.loop()
             l.check(("root", "INFO", "Connecting to MQTT broker..."),
                     ("root", "INFO", "Connection to MQTT broker succeeded."))
     finally:
@@ -278,3 +280,13 @@ def test_last_will():
         assert logLevels.count(logging.WARN) == 1
     finally:
         provider.stop(p)
+
+
+def test_unexpected_disconnect():
+    """Tests that an error is raised on broker unexpected disconnect"""
+    p = provider.run(sync=True)
+    # Close the socket
+    soc = p.socket()
+    soc.shutdown(socket.SHUT_RDWR)
+    with pytest.raises(provider.MQTTDisconnectError):
+        p.loop()

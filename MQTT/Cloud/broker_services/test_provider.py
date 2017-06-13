@@ -8,6 +8,7 @@ import paho.mqtt.client as Mqtt
 import time
 from testfixtures import LogCapture
 import logging
+import json
 
 
 class SmartAgent():
@@ -29,6 +30,9 @@ class SmartAgent():
         timeout (int)
             The number of seconds to wait for a message to call the on_publish
             timeout before raising an error in the wait method.
+        smartAgentsKnown (set)
+            The set of Smart Agents that were last published by the provider to
+            TOPIC_DISCOVERY. This is stored after being recieved over MQTT.
 
     """
     def __init__(self, agentID, timeout=3):
@@ -36,6 +40,7 @@ class SmartAgent():
         self.agentID = agentID
         self.publishedMessages = set()
         self.timeout = timeout
+        self.smartAgentsKnown = set()
 
     def setup(self):
         """Sets up an mqtt client, registers the handlers + will and starts a
@@ -50,6 +55,9 @@ class SmartAgent():
         self.client.will_set(provider.TOPIC_DISCONNECT_UNGRACE,
                              payload=self.agentID)
         self.wantToBeConnected = True
+        # Add callback when provider posts list of connected clients
+        self.client.message_callback_add(provider.TOPIC_DISCOVERY,
+                                         self._handle_discover_message)
         self.client.connect(provider.HOSTNAME, port=provider.PORT)
         self.client.loop_start()  # Start a threaded loop in the background.
 
@@ -64,6 +72,10 @@ class SmartAgent():
     def _handle_message(self, client, userdata, msg):
         """Callback after recieving a message"""
         raise NotImplementedError()
+
+    def _handle_discover_message(self, client, userdata, msg):
+        """Callback after recieving a discovery message"""
+        self.smartAgentsKnown = set(json.loads(msg.payload.decode()))
 
     def _handle_disconnect(self, client, userdata, rc):
         """Callback after disconnection."""
@@ -235,3 +247,29 @@ def test_unhandled_message():
     finally:
         sa.disconnect()
         provider.stop(p)
+
+
+def test_last_will():
+    try:
+        # p = provider.run()
+
+        # Create a Smart Agent that will register connection with a will
+        # and then disconnect
+        sa = SmartAgent("Id1")
+        sa.setup()
+        # Create another Smart Agent which broker-services doesn't know about
+        # to observe the will being published
+        observer = SmartAgent("Id2")
+        observer.setup()
+
+        sa.wait(sa.registerConnect())
+
+        input("Ctl-C to Ungraceful disconnect")
+    finally:
+        observer.disconnect()
+        # provider.stop(p)
+
+
+if __name__ == "__main__":
+    "Test last will this way for the moment - human ctl-C is required"
+    test_last_will()

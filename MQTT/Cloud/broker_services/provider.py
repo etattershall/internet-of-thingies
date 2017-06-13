@@ -82,11 +82,11 @@ def run():
 
     # Register message callbacks (prefix on)
     client.on_message = on_unhandled_message
-    client.message_callback_add(TOPIC_DISCONNECT_GRACE + "/#",
+    client.message_callback_add(TOPIC_DISCONNECT_GRACE,
                                 on_grace_disconnect)
-    client.message_callback_add(TOPIC_DISCONNECT_UNGRACE + "/#",
+    client.message_callback_add(TOPIC_DISCONNECT_UNGRACE,
                                 on_ungrace_disconnect)
-    client.message_callback_add(TOPIC_CONNECT + "/#",
+    client.message_callback_add(TOPIC_CONNECT,
                                 on_connect)
 
     logging.info("Connecting to MQTT broker...")
@@ -186,7 +186,7 @@ def on_unhandled_message(mqttClient, userdata, msg):
         # TODO: When starting / restarting this script, what should be done
         #       on recieving the retained TOPIC_DISCOVERY messsage from the
         #       previous instance?
-        TOPIC_DISCOVERY + "/#"
+        TOPIC_DISCOVERY
     ]
     if not any(Mqtt.topic_matches_sub(sub, msg.topic) for sub in subsToIgnore):
         logging.warning("Unexpected message recieved at topic [{}] "

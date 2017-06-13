@@ -188,7 +188,7 @@ def test_connect_disconnect():
 
 def test_unhandled_message():
     """Tests that messages to TOPIC_ROOT which aren't expected are logged"""
-    test_topics = [
+    test_topics = [  # Topics that aren't expected
         provider.TOPIC_ROOT,
         provider.TOPIC_DISCONNECT,  # Disonnect without grace/ungrace
         provider.TOPIC_ROOT + "/somethingRandom",
@@ -196,12 +196,16 @@ def test_unhandled_message():
         provider.TOPIC_ROOT + "/connec",
         provider.TOPIC_ROOT + "/disonnect/gracefu",
         provider.TOPIC_ROOT + "/disconnect/ungracefu",
+        # Extra
         provider.TOPIC_ROOT + "/connectANDEXTRA",
         provider.TOPIC_ROOT + "/EXTRAANDconnect",
         provider.TOPIC_DISCONNECT + "/gracefulANDEXTRA",
         provider.TOPIC_DISCONNECT + "/EXTRAANDgraceful",
         provider.TOPIC_DISCONNECT + "/ungracefulANDEXTRA",
-        provider.TOPIC_DISCONNECT + "/ANDEXTRAungraceful"
+        provider.TOPIC_DISCONNECT + "/ANDEXTRAungraceful",
+        # Beneath topic
+        provider.TOPIC_CONNECT + "/extraTopicLevel",
+        provider.TOPIC_DISCONNECT_GRACE + "/extraTopicLevel"
     ]
     test_payload = b"payload"
     try:

@@ -19,6 +19,8 @@ Smart Agent Setup
 Connect:
     - All smart agents should publish their ID on TOPIC_CONNECT immediately
       after connecting.
+    - All smart agents should listen on TOPIC_REQUEST for any message requiring
+      them to resend this message because the broker has just started up.
 
 Disconnect:
     - All smart agents must post their ID on TOPIC_DISCONNECT_GRACE before
@@ -52,6 +54,7 @@ TOPIC_DISCONNECT = TOPIC_ROOT + "/disconnect"
 TOPIC_DISCONNECT_GRACE = TOPIC_DISCONNECT + "/graceful"
 TOPIC_DISCONNECT_UNGRACE = TOPIC_DISCONNECT + "/ungraceful"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
+TOPIC_REQUEST = TOPIC_ROOT + "/request"
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -65,7 +68,6 @@ def run(sync=False):
     global connectedSmartAgents
     global shouldBeConnected
     global messagesInTransit
-    global connected
     connectedSmartAgents = set()  # Current list of connected Smart Agents
     shouldBeConnected = True      # Set to false before graceful disconnect
     # Create a dict of the mid of each message that has been sent with
@@ -134,14 +136,18 @@ def handle_connect(client, userdata, rc):
     """After connection with MQTT broker established, check for errors and
     subscribe to topics."""
     global connected
-    connected = True
     if rc != 0:
         raise IOError("Connection returned result: " + Mqtt.connack_string(rc))
     logging.info("Connection to MQTT broker succeeded.")
+    # Connected is if the mqtt client is connected to the broker.
+    connected = True
     # Subscribe here so that if reconnect the subscriptions are renewed.
     # Subscribe to all messages on and beneath the TOPIC_ROOT
     # Note: this includes messages that we send.
     client.subscribe(TOPIC_ROOT + "/#")
+    # Ask already connected devices to resend their connected status so we
+    # don't miss them. This should not be retained.
+    trackedPublish(client, TOPIC_REQUEST, "Send Connection Status", qos=1)
 
 
 def handle_publish(client, userdata, mid):
@@ -181,15 +187,12 @@ def handle_disconnect(mqttClient, userdata, rc):
 def on_unhandled_message(mqttClient, userdata, msg):
     """Callback on message recieved, not handled by a specific callback. This
     function raises an error if this is unexpected or ignores the message if
-    necessary.
-
-    For example, the message should be ignored if it is from this service,
-    perhaps posting on TOPIC_DISCOVERY."""
+    necessary."""
+    # Ignore topics which this application posts on so that it doesn't react
+    # to its own messages.
     subsToIgnore = [
-        # TODO: When starting / restarting this script, what should be done
-        #       on recieving the retained TOPIC_DISCOVERY messsage from the
-        #       previous instance?
-        TOPIC_DISCOVERY
+        TOPIC_DISCOVERY,
+        TOPIC_REQUEST
     ]
     if not any(Mqtt.topic_matches_sub(sub, msg.topic) for sub in subsToIgnore):
         logging.warning("Unexpected message recieved at topic [{}] "

@@ -34,6 +34,9 @@ class SmartAgent():
         smartAgentsKnown (set)
             The set of Smart Agents that were last published by the provider to
             TOPIC_DISCOVERY. This is stored after being recieved over MQTT.
+        msgsRecieved (list)
+            A list of messages recieved as paho.mqtt.client.MQTTMessage
+            instances. Each has a topic, payload, qos, retain, mid.
 
     """
     def __init__(self, agentID, timeout=3):
@@ -42,6 +45,8 @@ class SmartAgent():
         self.publishedMessages = set()
         self.timeout = timeout
         self.smartAgentsKnown = set()
+        self.msgsRecieved = []
+        self.connected = False
 
     def setup(self):
         """Sets up an mqtt client, registers the handlers + will and starts a
@@ -64,14 +69,14 @@ class SmartAgent():
     def _handle_connect(self, client, userdata, flags, rc):
         """After connection established, check for errors and subscribe
         to topics."""
-        self.connected = True
         if rc != 0:
             raise IOError("Connection returned result: " +
                           Mqtt.connack_string(rc))
+        self.connected = True
 
     def _handle_message(self, client, userdata, msg):
         """Callback after recieving a message"""
-        raise NotImplementedError()
+        self.msgsRecieved.append(msg)
 
     def _handle_discover_message(self, client, userdata, msg):
         """Callback after recieving a discovery message"""
@@ -290,3 +295,32 @@ def test_unexpected_disconnect():
     soc.shutdown(socket.SHUT_RDWR)
     with pytest.raises(provider.MQTTDisconnectError):
         p.loop()
+
+
+def test_starting_request_sent_on_connection():
+    """Tests that starting the provider publishes on TOPIC_REQUEST to
+    request SmartAgents that are already connected to post that they are."""
+    sa = SmartAgent("ID1")
+    sa.setup()
+    stopAt = time.time() + 10
+    while time.time() < stopAt:
+        if sa.connected:
+            break
+    else:
+        raise RuntimeError("Timeout expired before SA connected.")
+    sa.client.subscribe(provider.TOPIC_ROOT + "/#")
+    # Ideally callback should be handled here but until it stops working,
+    # this is only a test
+    p = provider.run()
+    try:
+        stopAt = time.time() + 10
+        while time.time() < stopAt:
+            if any(Mqtt.topic_matches_sub(provider.TOPIC_REQUEST, m.topic)
+                   for m in sa.msgsRecieved):
+                break
+        else:
+            raise RuntimeError("Timeout expired and no message on "
+                               "TOPIC_REQUEST.")
+    finally:
+        sa.disconnect()
+        provider.stop(p)

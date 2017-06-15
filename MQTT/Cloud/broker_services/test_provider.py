@@ -19,6 +19,8 @@ class SmartAgent():
     Members:
         agentID (str)
             The unique agent identifier.
+        status_topic (str)
+            The topic to use to update this agent's status.
         client (paho.mqtt.client.Client)
             The mqtt client instance.
         connected (bool)
@@ -42,6 +44,7 @@ class SmartAgent():
     def __init__(self, agentID, timeout=3):
         "Sets up the fake client with (str) agentID"
         self.agentID = agentID
+        self.status_topic = provider.TOPIC_STATUS.replace("+", self.agentID)
         self.publishedMessages = set()
         self.timeout = timeout
         self.smartAgentsKnown = set()
@@ -58,8 +61,9 @@ class SmartAgent():
         self.client.on_disconnect = self._handle_disconnect
         self.client.on_publish = self._handle_publish
         # TODO: Set qos here?
-        self.client.will_set(provider.TOPIC_DISCONNECT_UNGRACE,
-                             payload=self.agentID)
+        self.client.will_set(self.status_topic,
+                             payload=provider.STATUS_DISCONNECTED_UNGRACE,
+                             retain=True)
         # Add callback when provider posts list of connected clients
         self.client.message_callback_add(provider.TOPIC_DISCOVERY,
                                          self._handle_discover_message)
@@ -91,10 +95,14 @@ class SmartAgent():
         """Record messages that have been published"""
         self.publishedMessages.add(mid)
 
-    def registerConnect(self, retain=False):
+    def registerConnect(self, timeToUse=None, retain=True):
         """Register with broker-services by publishing agentID to
-        TOPIC_CONNECT"""
-        result, mid = self.client.publish(provider.TOPIC_CONNECT, self.agentID,
+        TOPIC_CONNECT default to True and current time but allow editing these
+        for testing."""
+        if timeToUse is None:
+            timeToUse = time.time()  # Default to current time
+        msg = provider.STATUS_CONNECTED + str(timeToUse)
+        result, mid = self.client.publish(self.status_topic, msg,
                                           retain=retain, qos=2)
         assert result == Mqtt.MQTT_ERR_SUCCESS  # Shouldn't be disconnected
         return mid
@@ -111,10 +119,10 @@ class SmartAgent():
         """Fake disconnection by publishing agentID to TOPIC_DISCONNECT.
         The graceful flag determines the exact topic and the retain flag
         determines whether it is retained."""
-        topic = (provider.TOPIC_DISCONNECT_GRACE if graceful
-                 else provider.TOPIC_DISCONNECT_UNGRACE)
-        result, mid = self.client.publish(topic, self.agentID, retain=retain,
-                                          qos=2)
+        status = (provider.STATUS_DISCONNECTED_GRACE if graceful
+                  else provider.STATUS_DISCONNECTED_UNGRACE)
+        result, mid = self.client.publish(self.status_topic, status,
+                                          retain=retain, qos=2)
         assert result == Mqtt.MQTT_ERR_SUCCESS
         return mid
 
@@ -156,12 +164,14 @@ def test_subscribe():
 
 def test_connect_disconnect():
     """Tests that a connection and disconnection doesn't raise errors. Under
-    the different options of retaining and not retaining messages or being
+    the different options of retaining and not retaining connect or being
     graceful and ungraceful."""
-    for option in range(8):
+    for option in range(4):
         graceful = bool(option & 1)
         retainConnect = bool(option & 2)
-        retainDisconnect = bool(option & 4)
+        # Disconnect must be retained otherwise the next test will be
+        # influenced
+        retainDisconnect = True
         with LogCapture() as l:
             try:
                 p = provider.run()
@@ -196,7 +206,12 @@ def test_connect_disconnect():
         if not graceful:
             assert ('Ungraceful disconnect from smart agent '
                     'with id: Id') in logMessages
-            assert all(l <= logging.WARN for l in logLevels)
+            try:
+                assert all(l <= logging.WARN for l in logLevels)
+            except:
+                for l in logLevels:
+                    print(l)
+                raise
             assert logLevels.count(logging.WARN) == 1
         l.uninstall()
 
@@ -205,22 +220,8 @@ def test_unhandled_message():
     """Tests that messages to TOPIC_ROOT which aren't expected are logged"""
     test_topics = [  # Topics that aren't expected
         provider.TOPIC_ROOT,
-        provider.TOPIC_DISCONNECT,  # Disonnect without grace/ungrace
-        provider.TOPIC_ROOT + "/somethingRandom",
-        # Truncated
-        provider.TOPIC_ROOT + "/connec",
-        provider.TOPIC_ROOT + "/disonnect/gracefu",
-        provider.TOPIC_ROOT + "/disconnect/ungracefu",
-        # Extra
-        provider.TOPIC_ROOT + "/connectANDEXTRA",
-        provider.TOPIC_ROOT + "/EXTRAANDconnect",
-        provider.TOPIC_DISCONNECT + "/gracefulANDEXTRA",
-        provider.TOPIC_DISCONNECT + "/EXTRAANDgraceful",
-        provider.TOPIC_DISCONNECT + "/ungracefulANDEXTRA",
-        provider.TOPIC_DISCONNECT + "/ANDEXTRAungraceful",
         # Beneath topic
-        provider.TOPIC_CONNECT + "/extraTopicLevel",
-        provider.TOPIC_DISCONNECT_GRACE + "/extraTopicLevel"
+        provider.TOPIC_ROOT + "/somethingRandom"
     ]
     test_payload = b"payload"
     p = provider.run()
@@ -245,10 +246,70 @@ def test_unhandled_message():
                     "payload [{}].")
         expectedMessages = set(toFormat.format(topic, test_payload)
                                for topic in test_topics)
-        assert all(expected in logMessages for expected in expectedMessages)
-        assert logLevels.count(logging.WARN) == len(expectedMessages)
+        try:
+            assert all(expected in logMessages for expected in
+                       expectedMessages)
+            assert logLevels.count(logging.WARN) == len(expectedMessages)
+        except:
+            for e in expectedMessages:
+                print(e, e in logMessages)
     finally:
         sa.disconnect()
+        provider.stop(p)
+
+
+def test_unexpected_status():
+    """Tests that an unexpected status is logged"""
+    p = provider.run()
+    sas = []
+    wrong_strings = [
+        "",
+        provider.STATUS_DISCONNECTED_GRACE[:-1],
+        provider.STATUS_DISCONNECTED_GRACE + "extra",
+        provider.STATUS_DISCONNECTED_UNGRACE[:-1],
+        provider.STATUS_DISCONNECTED_UNGRACE + "extra"
+    ]
+    wrong_times = [provider.STATUS_CONNECTED]
+    wrong_times += [(provider.STATUS_CONNECTED + "{}" + str(time.time())
+                     ).format(extraChar)
+                    for extraChar in ("|", ",", ".")]
+    test_payloads = wrong_strings + wrong_times
+    try:
+        mids = []  # List of mids to wait for publish
+        with LogCapture() as l:
+            for payload in test_payloads:
+                sa = SmartAgent("Id_unexpected_status_" + payload)
+                sas.append(sa)
+                sa.setup()
+                result, mid = sa.client.publish(sa.status_topic,
+                                                payload, qos=2)
+                assert result == Mqtt.MQTT_ERR_SUCCESS
+            mids.append(mid)
+            for mid, sa in zip(mids, sas):
+                sa.wait(mid)   # Wait for all the messages to be published
+            # Wait for the provider to deal with the published messages
+            time.sleep(1)
+        logMessages = list(r.msg for r in l.records)
+        logLevels = list(r.levelno for r in l.records)
+        assert all(l <= logging.WARN for l in logLevels)
+        warn_string = "Status update is neither connect or disconnect: {}"
+        warn_time = "Couldn't parse time from connect status: {}"
+        try:
+            for s in wrong_strings:
+                assert warn_string.format(s) in logMessages
+            for s in wrong_times:
+                assert warn_time.format(s) in logMessages
+        except:
+            for m in logMessages:
+                print(m)
+            raise
+        assert logLevels.count(logging.WARN) == (len(wrong_strings)
+                                                 + len(wrong_times))
+        provider.connectedSmartAgents = dict()
+
+    finally:
+        for sa in sas:
+            sa.disconnect()
         provider.stop(p)
 
 

@@ -16,17 +16,15 @@ Discovery:
 
 Smart Agent Setup
 -----------------
-Connect:
-    - All smart agents should publish their ID on TOPIC_CONNECT immediately
-      after connecting.
+Connect / Disconnect:
+    - All smart agents should publish retained messages on `agentID/status`
+      with:
+        - STATUS_CONNECTED + str(time.time()) just after connecting
+        - STATUS_DISCONNECTED_GRACE just before disconnecting gracefully
+        - STATUS_DISCONNECTED_UNGRACE as their last will
     - All smart agents should listen on TOPIC_REQUEST for any message requiring
       them to resend this message because the broker has just started up.
-
-Disconnect:
-    - All smart agents must post their ID on TOPIC_DISCONNECT_GRACE before
-      gracefully disconnecting. Ideally this shouldn't be a retained message.
-    - All smart agents must set their will to post their ID on
-      TOPIC_DISCONNECT_UNGRACE (again, not retained).
+      TODO: Is this necessary in new system?
 
 
 """
@@ -49,12 +47,15 @@ PORT = 1883
 # States that leading or trailing '/' creates a distinct Topic Name and '//'
 # IS allowed in a Topic Name.
 TOPIC_ROOT = "broker-services"
-TOPIC_CONNECT = TOPIC_ROOT + "/connect"
-TOPIC_DISCONNECT = TOPIC_ROOT + "/disconnect"
-TOPIC_DISCONNECT_GRACE = TOPIC_DISCONNECT + "/graceful"
-TOPIC_DISCONNECT_UNGRACE = TOPIC_DISCONNECT + "/ungraceful"
+TOPIC_STATUS = "+/status"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
 TOPIC_REQUEST = TOPIC_ROOT + "/request"
+
+
+STATUS_CONNECTED = "C"
+STATUS_DISCONNECTED_GRACE = "DG"
+STATUS_DISCONNECTED_UNGRACE = "DU"
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -68,7 +69,8 @@ def run(sync=False):
     global connectedSmartAgents
     global shouldBeConnected
     global messagesInTransit
-    connectedSmartAgents = set()  # Current list of connected Smart Agents
+    # Current map of connected Smart Agents to their timestamps
+    connectedSmartAgents = dict()
     shouldBeConnected = True      # Set to false before graceful disconnect
     # Create a dict of the mid of each message that has been sent with
     # client.publish() but has not had its callack (on_publish).
@@ -86,12 +88,7 @@ def run(sync=False):
 
     # Register message callbacks (prefix on)
     client.on_message = on_unhandled_message
-    client.message_callback_add(TOPIC_DISCONNECT_GRACE,
-                                on_grace_disconnect)
-    client.message_callback_add(TOPIC_DISCONNECT_UNGRACE,
-                                on_ungrace_disconnect)
-    client.message_callback_add(TOPIC_CONNECT,
-                                on_connect)
+    client.message_callback_add(TOPIC_STATUS, on_status_change)
 
     logging.info("Connecting to MQTT broker...")
     client.connect(HOSTNAME, port=PORT)
@@ -144,7 +141,8 @@ def handle_connect(client, userdata, rc):
     # Subscribe here so that if reconnect the subscriptions are renewed.
     # Subscribe to all messages on and beneath the TOPIC_ROOT
     # Note: this includes messages that we send.
-    client.subscribe(TOPIC_ROOT + "/#")
+    client.subscribe(TOPIC_ROOT + "/#")  # TODO: Still required?
+    client.subscribe(TOPIC_STATUS)
     # Ask already connected devices to resend their connected status so we
     # don't miss them. This should not be retained.
     trackedPublish(client, TOPIC_REQUEST, "Send Connection Status", qos=1)
@@ -170,6 +168,7 @@ def handle_subscribe(client, userdata, mid, granted_qos):
 class MQTTDisconnectError(RuntimeError):
     """Raised when disconnected from MQTT while shouldBeConnected is set to
     True. In other words, the disconnection was expected."""
+    pass
 
 
 def handle_disconnect(mqttClient, userdata, rc):
@@ -188,6 +187,8 @@ def on_unhandled_message(mqttClient, userdata, msg):
     """Callback on message recieved, not handled by a specific callback. This
     function raises an error if this is unexpected or ignores the message if
     necessary."""
+    if msg.retain:
+        return  # Don't keep alerting!
     # Ignore topics which this application posts on so that it doesn't react
     # to its own messages.
     subsToIgnore = [
@@ -200,52 +201,61 @@ def on_unhandled_message(mqttClient, userdata, msg):
                                                     msg.payload))
 
 
-def on_grace_disconnect(mqttClient, userdata, msg):
-    """Callback when a smart agent publishes to TOPIC_DISCONNECT_GRACE, aka
-    when they want to disconnect."""
-    if msg.retain:  # Skip old retained messages.
-        logging.debug("Skipping retained message.")
-        return
-    if len(msg.payload) == 0:
-        logging.warning("Smart Agent didn't send id to disconnect.")
-        return
-    agentID = msg.payload.decode()
-    try:
-        connectedSmartAgents.remove(agentID)
-    except KeyError:
-        logging.warning("Smart Agent with id: {} tried to disconnect but was "
-                        "not previously connected.".format(agentID))
+def on_status_change(mqttClient, userdata, msg):
+    """Callback when a SmartAgent updates TOPIC_STATUS.
+
+    The status value should be one of
+        - STATUS_CONNECTED + str(time.time())
+        - STATUS_DISCONNECTED_UNGRACE
+        - STATUS_DISCONNECTED_UNGRACE
+
+    Note that a timestamp can be appended to the STATUS_CONNECTED message so
+    that it can be considered if it is retained. TODO: This
+
+    This function takes the update and applies it to it's recorded
+    connectedSmartAgents, it then publishes the new list to TOPIC_DISCOVERY.
+    """
+    agentID = msg.topic.split("/", 1)[0]
+    status = msg.payload.decode()
+
+    if status.startswith(STATUS_CONNECTED):  # for connect, this ends with time
+        if msg.retain:
+            logging.debug("Retained connect message")
+        if agentID in connectedSmartAgents:
+            logging.warning("Smart Agent: {} registered to connect but is "
+                            "already recorded as connected.".format(agentID))
+            return
+        try:
+            timeOfConnect = float(status.replace(STATUS_CONNECTED, "", 1))
+        except ValueError:
+            logging.warning("Couldn't parse time from connect status: {}"
+                            .format(status))
+            timeOfConnect = 0
+        connectedSmartAgents[agentID] = timeOfConnect
+        logging.info("Added Smart Agent with id: {}".format(agentID))
+
+    elif(status == STATUS_DISCONNECTED_GRACE
+         or status == STATUS_DISCONNECTED_UNGRACE):
+        if msg.retain:  # Skip retained messages, they must be old.
+            logging.debug("Skipping retained disconnect message.")
+            return
+        # Log ungraceful disconnects
+        if status == STATUS_DISCONNECTED_UNGRACE:
+            logging.warning("Ungraceful disconnect from smart agent with id: "
+                            "{}".format(agentID))
+        # Try to delete it + log it else log that it isn't known about
+        try:
+            del connectedSmartAgents[agentID]
+        except KeyError:
+            logging.warning("Smart Agent with id: {} tried to disconnect but "
+                            "was not previously connected.".format(agentID))
+        else:
+            logging.info("Removed Smart Agent with id: {}".format(agentID))
+
     else:
-        logging.info("Removed Smart Agent with id: {}".format(agentID))
-    updateDiscovery(mqttClient)
-
-
-def on_ungrace_disconnect(mqttClient, userdata, msg):
-    """Could do something with unexpected disconnect here. For the moment,
-    just do the same as if it was a graceful disconnect."""
-    if msg.retain:  # Skip old retained messages.
-        logging.debug("Skipping retained message.")
+        logging.warning("Status update is neither connect or disconnect: {}"
+                        .format(status))
         return
-    logging.warning("Ungraceful disconnect from smart agent with id: {}"
-                    .format(msg.payload.decode()))
-    on_grace_disconnect(mqttClient, userdata, msg)
-
-
-def on_connect(mqttClient, userdata, msg):
-    """Callback when a smart agent and publishes to TOPIC_CONNECT
-    with it's agentID."""
-    if msg.retain:  # Skip retained messages, they must be old.
-        logging.debug("Skipping retained message.")
-        return
-    if len(msg.payload) == 0:
-        logging.warning("Smart Agent didn't send id to connect.")
-    agentID = msg.payload.decode()
-    if agentID in connectedSmartAgents:
-        logging.warning("Smart Agent: {} registered to connect but is already "
-                        "recorded as connected.".format(agentID))
-        return
-    connectedSmartAgents.add(agentID)  # Add to set -> auto remove DUP
-    logging.info("Added Smart Agent with id: {}".format(agentID))
     updateDiscovery(mqttClient)
 
 

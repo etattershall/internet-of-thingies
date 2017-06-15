@@ -60,10 +60,9 @@ class SmartAgent():
         self.client.on_message = self._handle_message
         self.client.on_disconnect = self._handle_disconnect
         self.client.on_publish = self._handle_publish
-        # TODO: Set qos here?
         self.client.will_set(self.status_topic,
                              payload=provider.STATUS_DISCONNECTED_UNGRACE,
-                             retain=True)
+                             retain=True, qos=1)
         # Add callback when provider posts list of connected clients
         self.client.message_callback_add(provider.TOPIC_DISCOVERY,
                                          self._handle_discover_message)
@@ -97,8 +96,10 @@ class SmartAgent():
 
     def registerConnect(self, timeToUse=None, retain=True):
         """Register with broker-services by publishing agentID to
-        TOPIC_CONNECT default to True and current time but allow editing these
-        for testing."""
+        TOPIC_STATUS.
+
+        Default to True and current time but allow editing these for
+        testing."""
         if timeToUse is None:
             timeToUse = time.time()  # Default to current time
         msg = provider.STATUS_CONNECTED + str(timeToUse)
@@ -116,7 +117,7 @@ class SmartAgent():
                 raise RuntimeError("Timeout reached before msg publish.")
 
     def registerDisconnect(self, graceful=True, retain=False):
-        """Fake disconnection by publishing agentID to TOPIC_DISCONNECT.
+        """Fake disconnection by publishing agentID to TOPIC_STATUS.
         The graceful flag determines the exact topic and the retain flag
         determines whether it is retained."""
         status = (provider.STATUS_DISCONNECTED_GRACE if graceful

@@ -167,7 +167,7 @@ def handle_subscribe(client, userdata, mid, granted_qos):
 
 class MQTTDisconnectError(RuntimeError):
     """Raised when disconnected from MQTT while shouldBeConnected is set to
-    True. In other words, the disconnection was expected."""
+    True. In other words, the disconnection was not expected."""
     pass
 
 
@@ -221,10 +221,6 @@ def on_status_change(mqttClient, userdata, msg):
     if status.startswith(STATUS_CONNECTED):  # for connect, this ends with time
         if msg.retain:
             logging.debug("Retained connect message")
-        if agentID in connectedSmartAgents:
-            logging.warning("Smart Agent: {} registered to connect but is "
-                            "already recorded as connected.".format(agentID))
-            return
         try:
             timeOfConnect = float(status.replace(STATUS_CONNECTED, "", 1))
         except ValueError:

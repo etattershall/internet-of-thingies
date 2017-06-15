@@ -344,3 +344,54 @@ def test_starting_request_sent_on_connection():
     finally:
         sa.disconnect()
         provider.stop(p)
+
+
+def test_updateSmartAgents():
+    """Checks that updateSmartAgents() returns True or False depending on
+    whether updateDiscovery() needs to be called"""
+    agentID = "id"
+
+    payloadOptions = [
+        (provider.STATUS_CONNECTED + str(0.0)).encode(),
+        (provider.STATUS_CONNECTED + str(1.0)).encode(),
+        provider.STATUS_DISCONNECTED_GRACE.encode(),
+        provider.STATUS_DISCONNECTED_UNGRACE.encode()
+    ]
+
+    def runTest(payload, old, expectedResult):
+        m = Mqtt.MQTTMessage(0, topic=agentID.encode() + b"/status")
+        m.payload = payload
+        print(m.topic, m.payload, old)
+        assert provider.updateSmartAgents(m, old) is expectedResult
+
+    # Add new
+    runTest(payloadOptions[0], {}, True)
+    runTest(payloadOptions[0], {"old1": 0.0}, True)
+    runTest(payloadOptions[0], {"old1": 0.0, "old2": 0.0}, True)
+    runTest(payloadOptions[1], {}, True)
+    runTest(payloadOptions[1], {"old1": 0.0}, True)
+    runTest(payloadOptions[1], {"old1": 0.0, "old2": 0.0}, True)
+
+    # Already added - but time will have updated
+    runTest(payloadOptions[0], {agentID: 0.0}, False)
+    runTest(payloadOptions[0], {agentID: 0.0, "old1": 0.0}, False)
+    runTest(payloadOptions[0], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, False)
+    runTest(payloadOptions[1], {agentID: 0.0}, False)
+    runTest(payloadOptions[1], {agentID: 0.0, "old1": 0.0}, False)
+    runTest(payloadOptions[1], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, False)
+
+    # Disconnect new
+    runTest(payloadOptions[2], {}, False)
+    runTest(payloadOptions[2], {"old1": 0.0}, False)
+    runTest(payloadOptions[2], {"old1": 0.0, "old2": 0.0}, False)
+    runTest(payloadOptions[3], {}, False)
+    runTest(payloadOptions[3], {"old1": 0.0}, False)
+    runTest(payloadOptions[3], {"old1": 0.0, "old2": 0.0}, False)
+
+    # Disconnect remove
+    runTest(payloadOptions[2], {agentID: 0.0}, True)
+    runTest(payloadOptions[2], {agentID: 0.0, "old1": 0.0}, True)
+    runTest(payloadOptions[2], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, True)
+    runTest(payloadOptions[3], {agentID: 0.0}, True)
+    runTest(payloadOptions[3], {agentID: 0.0, "old1": 0.0}, True)
+    runTest(payloadOptions[3], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, True)

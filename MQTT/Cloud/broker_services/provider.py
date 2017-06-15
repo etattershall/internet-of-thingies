@@ -212,6 +212,20 @@ def on_status_change(mqttClient, userdata, msg):
     This function takes the update and applies it to it's recorded
     connectedSmartAgents, it then publishes the new list to TOPIC_DISCOVERY.
     """
+    if updateSmartAgents(msg, connectedSmartAgents):
+        updateDiscovery(mqttClient)
+
+
+def updateSmartAgents(msg, oldSmartAgents):
+    """Given a msg recieved on TOPIC_STATUS and the previous dictionary of
+    connectedSmartAgents, this updates the dictionary if necessary and returns
+    True/False depending on whether the actual smart agents connected
+    (not their times) has changed.
+
+    This is separated from on_status_change() so that it can potentially be
+    imported by a SmartAgent which is also listening to TOPIC_STATUS so that it
+    can track the connectedSmartAgents without broker-services.
+    """
     agentID = msg.topic.split("/", 1)[0]
     status = msg.payload.decode()
 
@@ -224,32 +238,42 @@ def on_status_change(mqttClient, userdata, msg):
             logging.warning("Couldn't parse time from connect status: {}"
                             .format(status))
             timeOfConnect = 0
-        connectedSmartAgents[agentID] = timeOfConnect
+        if agentID in oldSmartAgents:
+            if timeOfConnect > oldSmartAgents[agentID]:
+                oldSmartAgents[agentID] = timeOfConnect
+                logging.debug("Updating time of connection only.")
+            else:
+                logging.warning("Got update for time of connection from the "
+                                "past.")
+            return False
+        oldSmartAgents[agentID] = timeOfConnect
         logging.info("Added Smart Agent with id: {}".format(agentID))
+        return True
 
     elif(status == STATUS_DISCONNECTED_GRACE
          or status == STATUS_DISCONNECTED_UNGRACE):
         if msg.retain:  # Skip retained messages, they must be old.
             logging.debug("Skipping retained disconnect message.")
-            return
+            return False
         # Log ungraceful disconnects
         if status == STATUS_DISCONNECTED_UNGRACE:
             logging.warning("Ungraceful disconnect from smart agent with id: "
                             "{}".format(agentID))
         # Try to delete it + log it else log that it isn't known about
         try:
-            del connectedSmartAgents[agentID]
+            del oldSmartAgents[agentID]
         except KeyError:
             logging.warning("Smart Agent with id: {} tried to disconnect but "
                             "was not previously connected.".format(agentID))
+            return False
         else:
             logging.info("Removed Smart Agent with id: {}".format(agentID))
+            return True
 
     else:
         logging.warning("Status update is neither connect or disconnect: {}"
                         .format(status))
-        return
-    updateDiscovery(mqttClient)
+        return False
 
 
 def updateDiscovery(mqttClient):

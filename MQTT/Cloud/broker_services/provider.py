@@ -139,9 +139,6 @@ def handle_connect(client, userdata, rc):
     # Connected is if the mqtt client is connected to the broker.
     connected = True
     # Subscribe here so that if reconnect the subscriptions are renewed.
-    # Subscribe to all messages on and beneath the TOPIC_ROOT
-    # Note: this includes messages that we send.
-    client.subscribe(TOPIC_ROOT + "/#")  # TODO: Still required?
     client.subscribe(TOPIC_STATUS)
     # Ask already connected devices to resend their connected status so we
     # don't miss them. This should not be retained.

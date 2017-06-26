@@ -1,23 +1,23 @@
-import sys
 import time
 import threading
-import select
 import paho.mqtt.client as mqtt
-
 import piduino
     
 
 def on_connect(client, userdata, rc):
+    # Thread is called when a connection to the MQTT broker is attempted
     print("Connected with result code " + str(rc))
 
 def on_message(client, userdata, message):
+    # Thread is called when a message is received from the MQTT broker
     print('Received message')
+    # If the message is intended for one of our edge devices...
     if message.topic.startswith(smart_agent_name + '/public/'):
         # Locate the appropriate edge device
         destination_id = message.topic.split('/')[2]
         for arduino in devices:
             if str(arduino.name) == str(destination_id):
-                # Relay the message to the arduino
+                # Package the message for the a
                 relay = {
                          'topic': message.topic.split('/')[4],
                          'payload': message.payload.decode()

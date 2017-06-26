@@ -1,6 +1,7 @@
 
 #include <SoftwareSerial.h>
 #include <ArduinoJson.h>
+String mode = "Serial";
 
 // Define the pins used for inputs and outputs
 int digital_inputs [0] = {};

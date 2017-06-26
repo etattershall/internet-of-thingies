@@ -5,23 +5,20 @@
 // Define the pins used for inputs and outputs
 int digital_inputs [0] = {};
 int analog_inputs [2] = {0, 1};
-int outputs [2] = {7, 8};
-
+int digital_outputs [1] = {7};
+int analog_outputs [1] = {9};
 
 // Choose names for the inputs and outputs
 // Note: don't use A5, since we are using this pin to set the random seed
 String digital_inputs_names [0] = {};
 String analog_inputs_names [2] = {"LDR", "Thermistor"};
-String outputs_names [2] = {"Red_LED", "Green_LED"};
-
-
-const int LED = 7;
-const int SENSOR = 0;
-
+String digital_outputs_names [1] = {"Red_LED"};
+String analog_outputs_names [1] = {"Green_LED"};
 // Create an empty string to store incoming data in
 String data = "";
 
-// Store a value for last publish time
+// Store a value for last publish time. We will need this to make sure that the Arduino pauses between
+// sending datapoints
 long previous_time = 0; 
 long interval = 5000; 
 
@@ -31,17 +28,17 @@ long device_id;
 void setup() {
   Serial.begin(9600);
 
-  // Set the digital pins as appropriate
+  // Set the digital pins as inputs and outputs (not needed for analog).
   for (int i=0; i<sizeof(digital_inputs); i++) {
     pinMode(digital_inputs[i], INPUT);
   }
-  for (int i=0; i<sizeof(outputs); i++) {
-    pinMode(outputs[i], OUTPUT);
+  for (int i=0; i<sizeof(digital_outputs); i++) {
+    pinMode(digital_outputs[i], OUTPUT);
   } 
   
   // Create a random seed by reading on the analogue pin
   randomSeed(analogRead(A5));
-  // Set a four digit device id
+  // Set a random four digit device id (in the future this will be better.
   device_id = random(1000,10000);
 }
 
@@ -49,16 +46,17 @@ void loop() {
   // Set the json buffer
   StaticJsonBuffer<500> jsonBuffer;
 
-  // If there is data available to read from the serial port, append it to our data string
+  // If there is data available...
   if (Serial.available()) 
   {
+    // Read the incoming data and append it to the end of our data string.
     int inbyte = Serial.read();
     data = data + char(inbyte);
     
   }
   // If there is no new data available...
   else {
-    // But we have some stored..
+    // But we have some stored...
     if (data.length() > 0){
       // Attempt to parse it
       JsonObject& incoming_message = jsonBuffer.parseObject(data);
@@ -66,24 +64,35 @@ void loop() {
       if (incoming_message.success()) {
         // Do what the message says!
         if (incoming_message["topic"] == "handshake"){
-          // Send back a handshake
+          // Send back a handshake. In the future this will be used for security (e.g. the two devices
+          // might share passwords or a cryptographic key), but for now they just share their IDs
           JsonObject& outgoing_message = jsonBuffer.createObject();
           outgoing_message["topic"] = "handshake";
           outgoing_message["payload"] = device_id;
           outgoing_message.printTo(Serial);
         }
 
-        // Check whether the message is an instruction for one of our devices
-        for (int i=0; i<sizeof(outputs); i++) {
-          if (incoming_message["topic"] == outputs_names[i]){
-            if (incoming_message["payload"] == "HIGH") {
-              digitalWrite(outputs[i], HIGH);
+        // Check whether the message is an instruction for one of our digital outputs
+        for (int i=0; i<sizeof(digital_outputs); i++) {
+          // If it is, do what it says
+          if (incoming_message["topic"] == digital_outputs_names[i]){
+            if (incoming_message["payload"] == "1") {
+              digitalWrite(digital_outputs[i], HIGH);
             }
-            else if (incoming_message["payload"] == "LOW"){
-              digitalWrite(outputs[i], LOW);
+            else if (incoming_message["payload"] == "0"){
+              digitalWrite(digital_outputs[i], LOW);
             }
           }
         }
+
+        // Check whether the message is an instruction for one of our analog outputs
+        for (int i=0; i<sizeof(analog_outputs); i++) {
+          // If it is, do what it says
+          if (incoming_message["topic"] == analog_outputs_names[i]){
+              analogWrite(analog_outputs[i], incoming_message["payload"]);
+          }
+        }
+        
         // If the message was a success, we no longer need the message data.
         // clear it out ready for the next message
         data = "";
@@ -93,34 +102,32 @@ void loop() {
     // If there is no data to read and no data is stored:
     else {
       
-    // Check if we are ready to send new data
-    unsigned long current_time = millis();
-    if(current_time - previous_time > interval) {
-      previous_time = current_time;
+      // Check if we are ready to send new data
+      unsigned long current_time = millis();
+      if(current_time - previous_time > interval) {
+        previous_time = current_time;
       
-      // Send data about each sensor
-      for (int i=0; i<sizeof(digital_inputs); i++) {
-        int sensor_state = digitalRead(digital_inputs[i]);
-        JsonObject& outgoing_message = jsonBuffer.createObject();
-        outgoing_message["topic"] = digital_inputs_names[i];
-        outgoing_message["payload"] = sensor_state;
-        outgoing_message.printTo(Serial);
-      }
+        // Send data about each sensor
+        for (int i=0; i<sizeof(digital_inputs); i++) {
+          int sensor_state = digitalRead(digital_inputs[i]);
+          JsonObject& outgoing_message = jsonBuffer.createObject();
+          outgoing_message["topic"] = digital_inputs_names[i];
+          outgoing_message["payload"] = sensor_state;
+          outgoing_message.printTo(Serial);
+        }
 
-      // Send data about each sensor
-      for (int i=0; i<sizeof(analog_inputs); i++) {
-        int sensor_state = analogRead(analog_inputs[i]);
-        JsonObject& outgoing_message = jsonBuffer.createObject();
-        outgoing_message["topic"] = analog_inputs_names[i];
-        outgoing_message["payload"] = sensor_state;
-        outgoing_message.printTo(Serial);
+        // Send data about each sensor
+        for (int i=0; i<sizeof(analog_inputs); i++) {
+          int sensor_state = analogRead(analog_inputs[i]);
+          JsonObject& outgoing_message = jsonBuffer.createObject();
+          outgoing_message["topic"] = analog_inputs_names[i];
+          outgoing_message["payload"] = sensor_state;
+          outgoing_message.printTo(Serial);
+        }  
       }
-
-      
-    
     }
   }
-  }
+  // Wait a little while.
   delay(10);
 }
 

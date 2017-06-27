@@ -1,20 +1,26 @@
 
+#include <dht.h>
 #include <SoftwareSerial.h>
 #include <ArduinoJson.h>
-String mode = "Serial";
+
+
+dht DHT;
+#define DHT11_PIN 5
 
 // Define the pins used for inputs and outputs
+bool dht_present = false;
 int digital_inputs [0] = {};
-int analog_inputs [2] = {0, 1};
-int digital_outputs [1] = {7};
-int analog_outputs [1] = {9};
+int analog_inputs [1] = {A0};
+int digital_outputs [0] = {};
+int analog_outputs [0] = {};
 
 // Choose names for the inputs and outputs
 // Note: don't use A5, since we are using this pin to set the random seed
 String digital_inputs_names [0] = {};
-String analog_inputs_names [2] = {"LDR", "Thermistor"};
-String digital_outputs_names [1] = {"Red_LED"};
-String analog_outputs_names [1] = {"Green_LED"};
+String analog_inputs_names [1] = {"LDR"};
+
+String digital_outputs_names [0] = {};
+String analog_outputs_names [0] = {};
 // Create an empty string to store incoming data in
 String data = "";
 
@@ -125,6 +131,20 @@ void loop() {
           outgoing_message["payload"] = sensor_state;
           outgoing_message.printTo(Serial);
         }  
+        int chk = DHT.read11(5);
+        if (dht_present){
+          
+          JsonObject& outgoing_message = jsonBuffer.createObject();
+          outgoing_message["topic"] = "Temperature";
+          outgoing_message["payload"] = DHT.temperature;
+          outgoing_message.printTo(Serial);
+        }
+        if (dht_present){
+          JsonObject& outgoing_message = jsonBuffer.createObject();
+          outgoing_message["topic"] = "Humidity";
+          outgoing_message["payload"] = DHT.humidity;
+          outgoing_message.printTo(Serial);
+        }
       }
     }
   }

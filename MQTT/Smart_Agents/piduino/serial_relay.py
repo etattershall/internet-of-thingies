@@ -30,6 +30,7 @@ def on_message(client, userdata, message):
 
 
 def on_publish(client, userdata, mid):
+    print('sent message')
     pass
 
 def on_subscribe(client, userdata, mid, granted_qos):
@@ -110,7 +111,15 @@ previously_connected = []
 protocol = mqtt.MQTTv31
 
 client = mqtt.Client(protocol=protocol)
-client.on_connect = on_connect
+
+# On my second raspberry pi, on_connect throws an error:
+# TypeError: on_connect() takes 3 positional arguments but 4 were given
+# Therefore, we will keep this inside a try except loop
+try:
+    client.on_connect = on_connect
+except Exception as e:
+    print(e)
+    
 client.on_message = on_message
 client.on_publish = on_publish
 

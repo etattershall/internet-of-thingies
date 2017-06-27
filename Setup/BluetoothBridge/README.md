@@ -21,6 +21,7 @@ git clone https://github.com/mk-fg/fgtk.git
 
 Edit `/etc/dhcpcd.conf` to add the standard settings for the bridge (should be exactly the same as `eth0` above it)
 
+**Remove eth0 entries and make this happen on startup somehow to prevent eth0 claiming the ip address!**
 ```
 interface br0
 static ip_address=130.246.77.144/22
@@ -38,8 +39,7 @@ TODO: Potentially need to set the broadcast address for `br0` but everything is 
 ```bash
 sudo brctl addbr br0                                # Create the bridge
 sudo brctl addif br0 eth0                           # Add eth0 to the bridge
-sudo ip link set eth0 master br0                    # Set br0 eth0's master
-sudo ip addr del 130.246.77.144/22 dev eth0         # Remove eth0's ip address
+sudo ifconfig eth0 0.0.0.0                          # Remove eth0's ip address
 screen -dm /home/pi/fgtk/bt-pan --debug server br0  # Register bluetooth device with the bridge
 ```
 
@@ -50,8 +50,19 @@ Sources:
 
 ##### Client (not connected to eth0)
 ```bash
+sudo brctl addbr br0
+sudo brctl addif br0 eth0
+sudo ifconfig eth0 0.0.0.0   # Only needed to stop eth0 claming the ip address
 screen -dm /home/pi/fgtk/bt-pan --debug client -w  B8:27:EB:96:85:A1
+sudo brctl addif br0 bnep0
 ```
+
+
+**Note that every time a network connection is dropped (eg unplugging eth0), then eth0 regains an ip address which needs to be removed by setting to 0.0.0.0**
+
+This can lead to interesting situations where a device can act as a bridge for one without eth0 (which can connect to the network fine) at the same time as not being able to connect to the internet.
+ 
+ **See alternateNetworking.md for alternate setup that avoids this - it is permentant...**
 
 
 ### Turning bluez to debug mode

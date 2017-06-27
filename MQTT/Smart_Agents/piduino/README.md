@@ -6,6 +6,6 @@
 - Make the launcher excutable using 'sudo chmod 755 launcher.sh'
 - Create a directory home/pi/logs
 - Call 'sudo crontab -e'
-- Append the line '@reboot sh /home/pi/bbt/launcher.sh >/home/pi/logs/cronlog 2>&1' to the bottom of the crontab file.
+- Append the line '@reboot sh /home/pi/piduino/launcher.sh >/home/pi/logs/cronlog 2>&1' to the bottom of the crontab file.
 
 Now, when you reboot your raspberry pi, the serial relay program should start automatically

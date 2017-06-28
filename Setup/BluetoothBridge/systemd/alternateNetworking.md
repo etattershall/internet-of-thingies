@@ -53,3 +53,10 @@ Gateway=130.246.76.254
 eof
 ```
 And reboot!
+
+## Starting bluetooth pan server on boot
+The bt-pan server can be run as a systemd service so that it is running from boot. To do this:
+```
+sudo cp pan.service.example.server /etc/systemd/system/
+```
+To check the status `sudo systemctl status pan`. To stop/start/restart: `sudo systemctl stop/start/restart pan`.

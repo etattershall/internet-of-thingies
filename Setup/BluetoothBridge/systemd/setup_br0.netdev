@@ -1,0 +1,6 @@
+cat > /etc/systemd/network/br0.netdev << eof
+[NetDev]
+Name=br0
+Kind=bridge
+
+eof

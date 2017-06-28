@@ -17,6 +17,8 @@ git clone https://github.com/mk-fg/fgtk.git
 
 ### Setup
 
+Pair **and trust** the two devices using any of the standard methods.
+
 #### First time only
 
 Edit `/etc/dhcpcd.conf` to add the standard settings for the bridge (should be exactly the same as `eth0` above it)
@@ -40,6 +42,7 @@ TODO: Potentially need to set the broadcast address for `br0` but everything is 
 sudo brctl addbr br0                                # Create the bridge
 sudo brctl addif br0 eth0                           # Add eth0 to the bridge
 sudo ifconfig eth0 0.0.0.0                          # Remove eth0's ip address
+sudo brctl stp br0 on
 screen -dm /home/pi/fgtk/bt-pan --debug server br0  # Register bluetooth device with the bridge
 ```
 
@@ -47,6 +50,7 @@ Sources:
 - [`brctl` cmds](https://wiki.debian.org/BridgeNetworkConnections)
 - [`sudo ip link set eth0 master br0` ](https://superuser.com/questions/916368/does-a-bridge-between-2-tap-interfaces-need-an-ip-address)
 - [Indepth notes on spanning tree (what happens in a loop?) and forwarding databases](http://linuxcommand.org/man_pages/brctl8.html)
+- [bt-pan and general info for Bluez5](http://blog.fraggod.net/2015/03/28/bluetooth-pan-network-setup-with-bluez-5x.html)
 
 ##### Client (not connected to eth0)
 ```bash
@@ -61,7 +65,7 @@ sudo brctl addif br0 bnep0
 **Note that every time a network connection is dropped (eg unplugging eth0), then eth0 regains an ip address which needs to be removed by setting to 0.0.0.0**
 
 This can lead to interesting situations where a device can act as a bridge for one without eth0 (which can connect to the network fine) at the same time as not being able to connect to the internet.
- 
+
  **See alternateNetworking.md for alternate setup that avoids this - it is permentant...**
 
 

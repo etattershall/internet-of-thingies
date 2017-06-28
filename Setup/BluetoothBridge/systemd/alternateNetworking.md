@@ -9,15 +9,24 @@ Instead, another option seems to be using `systemd` to configure the networking.
 
 [There is a guide here](https://major.io/2015/03/26/creating-a-bridge-for-virtual-machines-using-systemd-networkd)
 
+systemd can be used to setup the bridge from every boot so you always access the internet through `br0` rather than choosing between `eth0` or `bnep0` (bluetooth).
 
-After removing the entry in dhcpcd.conf (if not then you won't know this will work):
+This only worked if I set the static ip address/ gateway using `systemd` rather than dhcpcd.conf. I couldn't get the DNS part of `systemd` to work so the standard method (dhcpcd.conf) is still used for that.
+
+First remove `eth0` from dhcpcd.conf (we don't want eth0 to have an ip address) and set `br0` to:
+
+```
+interface br0
+# static ip_address=130.246.77.144/22
+# static routers=130.246.76.254
+static domain_name_servers=130.246.8.13
+```
+
+Enable `systemd-networkd` and setup the network over systemd using `pan.network`, `br0.netdev` and `br0.network`.
+
 ```
 sudo su
 systemctl enable systemd-networkd
-
-# These are required for dns lookups
-sudo systemctl enable systemd-resolved
-sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
 
 cat > /etc/systemd/network/pan.network << eof
 [Match]
@@ -39,7 +48,6 @@ cat > /etc/systemd/network/br0.network << eof
 Name=br0
 
 [Network]
-DNS=130.246.8.13
 Address=130.246.77.144/22
 Gateway=130.246.76.254
 eof

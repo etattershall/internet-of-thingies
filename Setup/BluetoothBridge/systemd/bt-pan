@@ -56,7 +56,7 @@ def find_device_in_objects(objects, device_address, adapter_pattern=None):
 	bus = get_bus()
 	path_prefix = ''
 	if adapter_pattern:
-		if not isinstance(adapter_pattern, types.StringTypes): adapter = adapter_pattern
+		if not isinstance(adapter_pattern, str): adapter = adapter_pattern
 		else: adapter = find_adapter_in_objects(objects, adapter_pattern)
 		path_prefix = adapter.object_path
 	for path, ifaces in objects.items():
@@ -186,7 +186,7 @@ def main(args=None):
 
 
 	elif opts.call == 'client':
-		dev_remote = find_device(opts.remote_addr, devs.values()[0])
+		dev_remote = find_device(opts.remote_addr, next(iter(devs.values())))
 		log.debug( 'Using remote device (addr: %s): %s',
 			prop_get(dev_remote, 'Address'), dev_remote.object_path )
 		try: dev_remote.ConnectProfile(opts.uuid)
@@ -205,7 +205,7 @@ def main(args=None):
 				dev_remote.object_path, prop_get(dev_remote, 'Address'), opts.uuid )
 			return
 
-		for n in xrange(2):
+		for n in range(2):
 			try: iface = net.Connect(opts.uuid)
 			except dbus.exceptions.DBusException as err:
 				if err.get_dbus_name() != 'org.bluez.Error.Failed': raise

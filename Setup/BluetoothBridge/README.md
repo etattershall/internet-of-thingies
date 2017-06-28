@@ -66,7 +66,7 @@ sudo brctl addif br0 bnep0
 
 This can lead to interesting situations where a device can act as a bridge for one without eth0 (which can connect to the network fine) at the same time as not being able to connect to the internet.
 
- **See alternateNetworking.md for alternate setup that avoids this - it is permentant...**
+ **See systemd/alternateNetworking.md for alternate setup that avoids this - it is permentant...**
 
 
 ### Turning bluez to debug mode

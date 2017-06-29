@@ -42,7 +42,6 @@ TODO: Potentially need to set the broadcast address for `br0` but everything is 
 sudo brctl addbr br0                                # Create the bridge
 sudo brctl addif br0 eth0                           # Add eth0 to the bridge
 sudo ifconfig eth0 0.0.0.0                          # Remove eth0's ip address
-sudo brctl stp br0 on
 screen -dm /home/pi/fgtk/bt-pan --debug server br0  # Register bluetooth device with the bridge
 ```
 
@@ -68,6 +67,11 @@ This can lead to interesting situations where a device can act as a bridge for o
 
  **See systemd/alternateNetworking.md for alternate setup that avoids this - it is permentant...**
 
+### NOTE ABOUT STP
+
+**Activating STP** on a bridge caused the STFC network to disable the ethernet port, losing all connection. This means that STP should only be activated on a private network.
+
+Without STP, it is important that no loops are created in the network. Ensure that the bluetooth bridge between the two PIs is only active when one of the PIs doesn't have ethernet connection. (Unless on an isolated network).
 
 ### Turning bluez to debug mode
 

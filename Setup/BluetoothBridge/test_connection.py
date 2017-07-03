@@ -5,6 +5,7 @@ hosts."""
 import socket
 import argparse
 import time
+import re
 
 
 def test(address, port):
@@ -40,7 +41,7 @@ def print_results(addresses, port):
               if test(addr, args.port)
               else wrapText(text=addr + " N", colour="red")
               for addr in addresses)
-    print(*result)
+    print(int(time.time()), *result)
 
 
 if __name__ == "__main__":
@@ -54,9 +55,18 @@ if __name__ == "__main__":
                         help='The address to connect to (ip or example.com).')
 
     args = parser.parse_args()
+    ip_addresses = []
+    for addr in args.address:
+        if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", addr):
+            ip_addresses.append(addr)
+        else:
+            # If it isn't an ip address eg "vm216.nubes.stfc.ac.uk" then
+            # get the ip address
+            ip_addresses.append(socket.gethostbyname(addr))
+
     try:
         while True:
-            print_results(args.address, args.port)
+            print_results(ip_addresses, args.port)
             time.sleep(1)
     except KeyboardInterrupt:
         print("Quit.")

@@ -317,35 +317,6 @@ def test_unexpected_disconnect():
         p.loop()
 
 
-def test_starting_request_sent_on_connection():
-    """Tests that starting the provider publishes on TOPIC_REQUEST to
-    request SmartAgents that are already connected to post that they are."""
-    sa = SmartAgent("ID1")
-    sa.setup()
-    stopAt = time.time() + 10
-    while time.time() < stopAt:
-        if sa.connected:
-            break
-    else:
-        raise RuntimeError("Timeout expired before SA connected.")
-    sa.client.subscribe(provider.TOPIC_ROOT + "/#")
-    # Ideally callback should be handled here but until it stops working,
-    # this is only a test
-    p = provider.run()
-    try:
-        stopAt = time.time() + 10
-        while time.time() < stopAt:
-            if any(Mqtt.topic_matches_sub(provider.TOPIC_REQUEST, m.topic)
-                   for m in sa.msgsRecieved):
-                break
-        else:
-            raise RuntimeError("Timeout expired and no message on "
-                               "TOPIC_REQUEST.")
-    finally:
-        sa.disconnect()
-        provider.stop(p)
-
-
 def test_updateSmartAgents():
     """Checks that updateSmartAgents() returns True or False depending on
     whether updateDiscovery() needs to be called"""

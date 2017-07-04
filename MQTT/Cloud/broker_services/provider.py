@@ -49,7 +49,6 @@ PORT = 1883
 TOPIC_ROOT = "broker-services"
 TOPIC_STATUS = "+/private/status"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
-TOPIC_REQUEST = TOPIC_ROOT + "/request"
 
 
 STATUS_CONNECTED = "C"
@@ -140,9 +139,6 @@ def handle_connect(client, userdata, rc):
     connected = True
     # Subscribe here so that if reconnect the subscriptions are renewed.
     client.subscribe(TOPIC_STATUS)
-    # Ask already connected devices to resend their connected status so we
-    # don't miss them. This should not be retained.
-    trackedPublish(client, TOPIC_REQUEST, "Send Connection Status", qos=1)
 
 
 def handle_publish(client, userdata, mid):
@@ -189,8 +185,7 @@ def on_unhandled_message(mqttClient, userdata, msg):
     # Ignore topics which this application posts on so that it doesn't react
     # to its own messages.
     subsToIgnore = [
-        TOPIC_DISCOVERY,
-        TOPIC_REQUEST
+        TOPIC_DISCOVERY
     ]
     if not any(Mqtt.topic_matches_sub(sub, msg.topic) for sub in subsToIgnore):
         logging.warning("Unexpected message recieved at topic [{}] "

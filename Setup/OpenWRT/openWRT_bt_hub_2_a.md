@@ -56,3 +56,18 @@ sudo ./tjtag -probeonly /noemw > ~/internet-of-thingies/Setup/OpenWRT/probonly_n
 ```
 6. This also failed to recognise the device.
 
+### Why did the first attempt fail?
+The output suggests some possibilities.
+
+1. ~~Device is not Connected.~~
+2. ~~Device is not Powered On.~~
+3. Improper JTAG Cable.
+4. ~~Unrecognized CPU Chip ID.~~
+
+Given the LEDs, it is not 2 and I had connected it so it can't be 1.
+
+It is also not 4 as different sources already linked here point out that `tjtag-pi` works on this chip. The [tjtag.c](https://github.com/oxplot/tjtag-pi/blob/master/tjtag.c) code also says that `Broadcom BCM6358` is supported. The chip ID is also unlikely to be all zeros.
+
+This means 3 is the only option - need to check soldering.
+
+However, [this issue here](https://github.com/oxplot/tjtag-pi/issues/3) suggests that the code doesn't work on the PI3. This should also be tested on an older PI.

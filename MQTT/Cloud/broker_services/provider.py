@@ -1,17 +1,17 @@
 """
 Runs an mqtt client that provides broker services.
 
-Usage
-
+Usage:
 
 Services
 --------
 Discovery:
-    - Maintains a list of connected smart agents as the retained message on
-      TOPIC_DISCOVERY. This means that on subscription to TOPIC_DISCOVERY,
+    - Maintains a dictionary of connected smart agents as the retained message
+      on TOPIC_DISCOVERY. This means that on subscription to TOPIC_DISCOVERY,
       a message with the currently connected devices will imediately be sent.
-    - List is encoded as JSON with each connected agentID as a string within a
-      list/array.
+    - The dictionary is encoded as JSON with each connected agentID as a string
+      for the keys. The values are the edgeIDs of Edge Devices that are
+      connected to the respective agent.
 
 
 Smart Agent Setup
@@ -22,9 +22,7 @@ Connect / Disconnect:
         - STATUS_CONNECTED + str(time.time()) just after connecting
         - STATUS_DISCONNECTED_GRACE just before disconnecting gracefully
         - STATUS_DISCONNECTED_UNGRACE as their last will
-    - All smart agents should listen on TOPIC_REQUEST for any message requiring
-      them to resend this message because the broker has just started up.
-      TODO: Is this necessary in new system?
+
 
 
 """
@@ -48,6 +46,7 @@ PORT = 1883
 # IS allowed in a Topic Name.
 TOPIC_ROOT = "broker-services"
 TOPIC_STATUS = "+/private/status"
+TOPIC_EDGE = "+/private/edge"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
 
 
@@ -68,7 +67,8 @@ def run(sync=False):
     global connectedSmartAgents
     global shouldBeConnected
     global messagesInTransit
-    # Current map of connected Smart Agents to their timestamps
+    # Current map of connected Smart Agents to their list of connected Edge
+    # Devices
     connectedSmartAgents = dict()
     shouldBeConnected = True      # Set to false before graceful disconnect
     # Create a dict of the mid of each message that has been sent with
@@ -87,7 +87,7 @@ def run(sync=False):
 
     # Register message callbacks (prefix on)
     client.on_message = on_unhandled_message
-    client.message_callback_add(TOPIC_STATUS, on_status_change)
+    client.message_callback_add(TOPIC_STATUS, on_status_or_edge_change)
 
     logging.info("Connecting to MQTT broker...")
     client.connect(HOSTNAME, port=PORT)
@@ -193,81 +193,127 @@ def on_unhandled_message(mqttClient, userdata, msg):
                                                     msg.payload))
 
 
-def on_status_change(mqttClient, userdata, msg):
-    """Callback when a SmartAgent updates TOPIC_STATUS.
+def on_status_or_edge_change(mqttClient, userdata, msg):
+    """Callback when a Smart Agent updates TOPIC_STATUS or TOPIC_EDGE.
+
+    The edge value should be a json encoded list of edgeIDs for the Edge
+    Devices connected to that particular Smart Agent.
 
     The status value should be one of
         - STATUS_CONNECTED + str(time.time())
         - STATUS_DISCONNECTED_UNGRACE
         - STATUS_DISCONNECTED_UNGRACE
 
-    Note that a timestamp can be appended to the STATUS_CONNECTED message so
-    that it can be considered if it is retained. TODO: This
+    Note that for the moment, the timestamp isn't used.
 
     This function takes the update and applies it to it's recorded
-    connectedSmartAgents, it then publishes the new list to TOPIC_DISCOVERY.
+    connectedSmartAgents, it then publishes the new dict to TOPIC_DISCOVERY if
+    there is a change.
     """
-    if updateSmartAgents(msg, connectedSmartAgents):
+    if updateSmartAgentsOrEdgeDevices(msg, connectedSmartAgents):
         updateDiscovery(mqttClient)
 
 
-def updateSmartAgents(msg, oldSmartAgents):
-    """Given a msg recieved on TOPIC_STATUS and the previous dictionary of
-    connectedSmartAgents, this updates the dictionary if necessary and returns
-    True/False depending on whether the actual smart agents connected
-    (not their times) has changed.
+def updateSmartAgentsOrEdgeDevices(msg, oldSmartAgents):
+    """Given a msg recieved on TOPIC_STATUS or TOPIC_EDGE and the previous
+    dictionary of connectedSmartAgents, this updates the dictionary if
+    necessary and returns True/False depending on whether there has been a
+    change.
 
-    This is separated from on_status_change() so that it can potentially be
-    imported by a SmartAgent which is also listening to TOPIC_STATUS so that it
-    can track the connectedSmartAgents without broker-services.
+    This is separated from on_status_or_edge_change() so that it can
+    potentially be imported by a SmartAgent which is also listening to
+    TOPIC_STATUS / TOPIC_EDGE so that it can track the connectedSmartAgents
+    without broker-services. To do this, a similar callback to
+    on_status_or_edge_change() should be implemented on the SmartAgent which
+    doesn't include a call to updateDiscovery()
     """
     agentID = msg.topic.split("/", 1)[0]
-    status = msg.payload.decode()
+    payload = msg.payload.decode()
 
-    if status.startswith(STATUS_CONNECTED):  # for connect, this ends with time
-        if msg.retain:
-            logging.debug("Retained connect message")
-        try:
-            timeOfConnect = float(status.replace(STATUS_CONNECTED, "", 1))
-        except ValueError:
-            logging.warning("Couldn't parse time from connect status: {}"
-                            .format(status))
-            timeOfConnect = 0
+    # Deal with updates to Edge Devices connected to agentID
+    if Mqtt.topic_matches_sub(TOPIC_EDGE, msg.topic):
+        latestEdgeDevices = json.loads(payload)
+        if type(latestEdgeDevices) != list:
+            logging.warning("""Didn't get a json list for Edge Devices.""")
+            return False
         if agentID in oldSmartAgents:
-            if timeOfConnect > oldSmartAgents[agentID]:
-                oldSmartAgents[agentID] = timeOfConnect
-                logging.debug("Updating time of connection only.")
+            if msg.retain:
+                logging.debug("Retained Edge Device list")
+            if latestEdgeDevices == oldSmartAgents[agentID]:
+                logging.debug("""Recieved the same list of Edge Devices for
+                              SmartAgent: {}.""".format(agentID))
+                return False
             else:
-                logging.warning("Got update for time of connection from the "
-                                "past.")
-            return False
-        oldSmartAgents[agentID] = timeOfConnect
-        logging.info("Added Smart Agent with id: {}".format(agentID))
-        return True
-
-    elif(status == STATUS_DISCONNECTED_GRACE
-         or status == STATUS_DISCONNECTED_UNGRACE):
-        if msg.retain:  # Skip retained messages, they must be old.
-            logging.debug("Skipping retained disconnect message.")
-            return False
-        # Log ungraceful disconnects
-        if status == STATUS_DISCONNECTED_UNGRACE:
-            logging.warning("Ungraceful disconnect from smart agent with id: "
-                            "{}".format(agentID))
-        # Try to delete it + log it else log that it isn't known about
-        try:
-            del oldSmartAgents[agentID]
-        except KeyError:
-            logging.warning("Smart Agent with id: {} tried to disconnect but "
-                            "was not previously connected.".format(agentID))
-            return False
+                oldSmartAgents[agentID] = latestEdgeDevices
+                logging.info("""Updated the Edge Devices for SmartAgent: {}"""
+                             .format(agentID))
+                return True
         else:
-            logging.info("Removed Smart Agent with id: {}".format(agentID))
-            return True
+            if msg.retain:
+                # This SmartAgent is not known about and this is an old message
+                # so do nothing here
+                logging.debug("Retained Edge Device list.")
+                return False
+            else:
+                # If this agent isn't in the dict of smart agents then it
+                # either hasn't connected or somehow we have missed the
+                # connection. Either way is bad so log this.
+                logging.warning("""Recieved list of Edge Devices for an unknown
+                                SmartAgent.""")
+                # As this is not a retained message, the SmartAgent is clearly
+                # connected so add them and their Edge Devices anyway.
+                oldSmartAgents[agentID] = latestEdgeDevices
+                return True
 
+    # Deal with the updates to the status of agentID
+    elif Mqtt.topic_matches_sub(TOPIC_STATUS, msg.topic):
+        status = payload
+        if status.startswith(STATUS_CONNECTED):  # This ends with timestamp
+            if msg.retain:
+                logging.debug("Retained connect message")
+            try:
+                # Could do something with this time in the future.
+                float(status.replace(STATUS_CONNECTED, "", 1))
+            except ValueError:
+                logging.warning("Couldn't parse time from connect status: {}"
+                                .format(status))
+            if agentID in oldSmartAgents:
+                logging.debug("Smart Agent already connected.")
+                return False
+            else:
+                # Add the SmartAgent to the dictionary with an empty list
+                # of Edge Devices.
+                oldSmartAgents[agentID] = []
+                logging.info("Added Smart Agent with id: {}".format(agentID))
+                return True
+        elif(status == STATUS_DISCONNECTED_GRACE
+             or status == STATUS_DISCONNECTED_UNGRACE):
+            if msg.retain:  # Skip retained messages, they must be old.
+                logging.debug("Skipping retained disconnect message.")
+                return False
+            # Log ungraceful disconnects
+            if status == STATUS_DISCONNECTED_UNGRACE:
+                logging.warning("Ungraceful disconnect from smart agent with "
+                                "id: {}".format(agentID))
+            # Try to delete it + log it else log that it isn't known about
+            try:
+                del oldSmartAgents[agentID]
+            except KeyError:
+                logging.warning("Smart Agent with id: {} tried to disconnect "
+                                "but was not previously connected."
+                                .format(agentID))
+                return False
+            else:
+                logging.info("Removed Smart Agent with id: {}".format(agentID))
+                return True
+        else:
+            logging.warning("Status update is neither connect or "
+                            "disconnect: {}".format(status))
+            return False
     else:
-        logging.warning("Status update is neither connect or disconnect: {}"
-                        .format(status))
+        logging.warning("Neither TOPIC_EDGE or TOPIC_STATUS was passed to "
+                        "updateSmartAgentsOrEdgeDevices(). The topic was {}"
+                        .format(msg.topic))
         return False
 
 
@@ -278,7 +324,7 @@ def updateDiscovery(mqttClient):
     a message callback."""
     # Ensure that this get sent so use qos=1. Duplicates shouldn't matter.
     trackedPublish(mqttClient, TOPIC_DISCOVERY,
-                   json.dumps(list(connectedSmartAgents)), qos=1, retain=True)
+                   json.dumps(connectedSmartAgents), qos=1, retain=True)
     logging.debug("Connected Smart Agents: {}".format(connectedSmartAgents))
 
 

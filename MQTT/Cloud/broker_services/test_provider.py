@@ -317,9 +317,10 @@ def test_unexpected_disconnect():
         p.loop()
 
 
-def test_updateSmartAgents():
+def test_updateSmartAgents_status():
     """Checks that updateSmartAgents() returns True or False depending on
-    whether updateDiscovery() needs to be called"""
+    whether updateDiscovery() needs to be called for a change in a smart
+    agent's status"""
     agentID = "id"
 
     payloadOptions = [
@@ -330,39 +331,68 @@ def test_updateSmartAgents():
     ]
 
     def runTest(payload, old, expectedResult):
-        m = Mqtt.MQTTMessage(0, topic=agentID.encode() + b"/status")
+        t = provider.TOPIC_STATUS.replace("+", agentID).encode()
+        m = Mqtt.MQTTMessage(0, topic=t)
         m.payload = payload
         print(m.topic, m.payload, old)
-        assert provider.updateSmartAgents(m, old) is expectedResult
+        res = provider.updateSmartAgentsOrEdgeDevices(m, old)
+        assert (res is expectedResult)
+
+    # Add new (with different times)
+    runTest(payloadOptions[0], {}, True)
+    runTest(payloadOptions[0], {"old1": []}, True)
+    runTest(payloadOptions[0], {"old1": [], "old2": []}, True)
+    runTest(payloadOptions[1], {}, True)
+    runTest(payloadOptions[1], {"old1": []}, True)
+    runTest(payloadOptions[1], {"old1": [], "old2": []}, True)
+
+    # Disconnect from new device
+    runTest(payloadOptions[2], {}, False)
+    runTest(payloadOptions[2], {"old1": []}, False)
+    runTest(payloadOptions[2], {"old1": [], "old2": []}, False)
+    runTest(payloadOptions[3], {}, False)
+    runTest(payloadOptions[3], {"old1": []}, False)
+    runTest(payloadOptions[3], {"old1": [], "old2": []}, False)
+
+    # Disconnect remove current device
+    runTest(payloadOptions[2], {agentID: []}, True)
+    runTest(payloadOptions[2], {agentID: [], "old1": []}, True)
+    runTest(payloadOptions[2], {agentID: [], "old1": [], "old2": []}, True)
+    runTest(payloadOptions[3], {agentID: []}, True)
+    runTest(payloadOptions[3], {agentID: [], "old1": []}, True)
+    runTest(payloadOptions[3], {agentID: [], "old1": [], "old2": []}, True)
+
+
+def test_updateSmartAgents_edge():
+    """Checks that updateSmartAgents() returns True or False depending on
+    whether updateDiscovery() needs to be called for a change in a smart
+    agent's edge devices"""
+    agentID = "id"
+
+    edgeOptions = [  # No duplicates here
+        [],  # Empty
+        ["one edge string"],
+        ["multi", "edge", "string"],
+        [1],  # Number
+        [1, 2, 3, 0]  # Multi number
+    ]
+
+    def runTest(payload, old, expectedResult):
+        t = provider.TOPIC_EDGE.replace("+", agentID).encode()
+        m = Mqtt.MQTTMessage(0, topic=t)
+        m.payload = payload
+        print(m.topic, m.payload, old)
+        res = provider.updateSmartAgentsOrEdgeDevices(m, old)
+        assert (res is expectedResult)
 
     # Add new
-    runTest(payloadOptions[0], {}, True)
-    runTest(payloadOptions[0], {"old1": 0.0}, True)
-    runTest(payloadOptions[0], {"old1": 0.0, "old2": 0.0}, True)
-    runTest(payloadOptions[1], {}, True)
-    runTest(payloadOptions[1], {"old1": 0.0}, True)
-    runTest(payloadOptions[1], {"old1": 0.0, "old2": 0.0}, True)
-
-    # Already added - but time will have updated
-    runTest(payloadOptions[0], {agentID: 0.0}, False)
-    runTest(payloadOptions[0], {agentID: 0.0, "old1": 0.0}, False)
-    runTest(payloadOptions[0], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, False)
-    runTest(payloadOptions[1], {agentID: 0.0}, False)
-    runTest(payloadOptions[1], {agentID: 0.0, "old1": 0.0}, False)
-    runTest(payloadOptions[1], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, False)
-
-    # Disconnect new
-    runTest(payloadOptions[2], {}, False)
-    runTest(payloadOptions[2], {"old1": 0.0}, False)
-    runTest(payloadOptions[2], {"old1": 0.0, "old2": 0.0}, False)
-    runTest(payloadOptions[3], {}, False)
-    runTest(payloadOptions[3], {"old1": 0.0}, False)
-    runTest(payloadOptions[3], {"old1": 0.0, "old2": 0.0}, False)
-
-    # Disconnect remove
-    runTest(payloadOptions[2], {agentID: 0.0}, True)
-    runTest(payloadOptions[2], {agentID: 0.0, "old1": 0.0}, True)
-    runTest(payloadOptions[2], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, True)
-    runTest(payloadOptions[3], {agentID: 0.0}, True)
-    runTest(payloadOptions[3], {agentID: 0.0, "old1": 0.0}, True)
-    runTest(payloadOptions[3], {agentID: 0.0, "old1": 0.0, "old2": 0.0}, True)
+    for this_edge in edgeOptions:
+        this_payload = json.dumps(this_edge).encode()
+        runTest(this_payload, {}, True)
+        runTest(this_payload, {"old1": []}, True)
+        runTest(this_payload, {"old1": [], "old2": []}, True)
+        for old_edge in edgeOptions:
+            # This should update the list if the old_payload is not the same as
+            # the new one.
+            runTest(this_payload, {agentID: old_edge},
+                    old_edge != this_edge)

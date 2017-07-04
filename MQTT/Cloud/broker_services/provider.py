@@ -17,7 +17,7 @@ Discovery:
 Smart Agent Setup
 -----------------
 Connect / Disconnect:
-    - All smart agents should publish retained messages on `agentID/status`
+    - All smart agents should publish retained messages on TOPIC_STATUS
       with:
         - STATUS_CONNECTED + str(time.time()) just after connecting
         - STATUS_DISCONNECTED_GRACE just before disconnecting gracefully
@@ -47,7 +47,7 @@ PORT = 1883
 # States that leading or trailing '/' creates a distinct Topic Name and '//'
 # IS allowed in a Topic Name.
 TOPIC_ROOT = "broker-services"
-TOPIC_STATUS = "+/status"
+TOPIC_STATUS = "+/private/status"
 TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
 TOPIC_REQUEST = TOPIC_ROOT + "/request"
 

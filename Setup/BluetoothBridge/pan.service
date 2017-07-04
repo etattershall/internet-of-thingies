@@ -6,8 +6,7 @@ PartOf=bluetooth.service
 
 [Service]
 Type=notify
-ExecStart=/home/pi/internet-of-thingies/Setup/BluetoothBridge/systemd/bt-pan --debug --systemd server br0
+ExecStart=/home/pi/internet-of-thingies/Setup/BluetoothBridge/bt-pan --debug --systemd server br0
 
 [Install]
 WantedBy=bluetooth.target
-

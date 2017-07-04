@@ -3,4 +3,4 @@ Description=Bluetooth Personal Area Network
 
 [Service]
 Type=notify
-ExecStart=/home/pi/internet-of-thingies/Setup/BluetoothBridge/systemd/bt-pan --debug --systemd client %I --wait
+ExecStart=/home/pi/internet-of-thingies/Setup/BluetoothBridge/bt-pan --debug --systemd client %I --wait

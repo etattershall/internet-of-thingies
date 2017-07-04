@@ -1,0 +1,2 @@
+sudo ./tjtag -probeonly > ~/internet-of-thingies/Setup/OpenWRT/probonly_output
+sudo ./tjtag -probeonly /noemw > ~/internet-of-thingies/Setup/OpenWRT/probonly__no_emu_output

@@ -1,0 +1,17 @@
+
+==============================================
+ EJTAG Debrick Utility v3.0.1 Tornado-MOD 
+==============================================
+
+Probing bus ... Done
+
+Instruction Length set to 5
+
+CPU Chip ID: 00000000000000000000000000000000 (00000000)
+*** Unknown or NO CPU Chip ID Detected ***
+
+*** Possible Causes:
+    1) Device is not Connected.
+    2) Device is not Powered On.
+    3) Improper JTAG Cable.
+    4) Unrecognized CPU Chip ID.

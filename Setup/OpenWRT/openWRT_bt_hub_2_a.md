@@ -38,14 +38,21 @@ Note that the pinout of the device on the right is different to the BT Home Hub.
 Following the instructions from the library's README:
 1. Wired up the pi as above
 2. Powered up WRT (5 blue lights then settled to just 'power')
-3. Checkout, compile and run code as in their README (running the last command as root with `sudo` because it couldn't access `/dev/mem`):
+3. Checkout, compile and run code as in their README
 
     ```bash
     $ cd ~
     $ git clone git@github.com:oxplot/tjtag-pi.git
     $ cd tjtag-pi
     $ make pi
-    $ sudo ./tjtag -probeonly
     ```
-4. After this failed, attempt with `/noemw`
-5. This also failed to recognise the device.
+4. I ran the check as root with `sudo` because it couldn't access `/dev/mem`
+```bash
+sudo ./tjtag -probeonly > ~/internet-of-thingies/Setup/OpenWRT/probonly_output
+```
+5. After this failed, I attempted this with `/noemw` because it was suggested.
+```
+sudo ./tjtag -probeonly /noemw > ~/internet-of-thingies/Setup/OpenWRT/probonly_no_emu_output
+```
+6. This also failed to recognise the device.
+

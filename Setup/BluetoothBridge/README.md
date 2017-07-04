@@ -6,72 +6,97 @@
 Joining two interfaces (eg `eth0` and `wlan0`) to the same network. This might be a way to join bluetooth to the rest of the internet. See [this page](https://wiki.debian.org/BridgeNetworkConnections) for more information.
 
 ### Installing
-bridge-utils provides the tools to setup a bridge. For the moment, a python script `bt-pan` configures either end of the bluetooth setup. It is included in a library of misc tools.
-```bash
-sudo apt install bridge-utils
-cd ~
-git clone https://github.com/mk-fg/fgtk.git
-```
+bridge-utils provides the tools to setup a bridge. Install this with `sudo apt install bridge-utils`.
 
+This gives access to the `brctl` command line tool.
+
+[`brctl` cmds](https://wiki.debian.org/BridgeNetworkConnections)
+
+### Library
+
+For the moment, a python script `bt-pan` configures either end of the bluetooth setup. It is included in a library of misc tools `git clone https://github.com/mk-fg/fgtk.git`. The script's license allows it to be included here to avoid this step.
+
+[bt-pan and general info for Bluez5](http://blog.fraggod.net/2015/03/28/bluetooth-pan-network-setup-with-bluez-5x.html)
 
 
 ### Setup
 
+#### Standard Bluetooth Setup
+
 Pair **and trust** the two devices using any of the standard methods.
 
-#### First time only
+#### Changes to networking
 
-Edit `/etc/dhcpcd.conf` to add the standard settings for the bridge (should be exactly the same as `eth0` above it)
+It appears that our current networking solution (`dhcpcd.conf`) isn't designed to setup bridge interfaces.
+There are many resources that show how to setup persistant bridge interfaces using `/etc/network/interfaces`. However, this seems to be legacy and there is a message talking about conflicts between `/etc/network/interfaces` and `dhcpcd.conf`.
 
-**Remove eth0 entries and make this happen on startup somehow to prevent eth0 claiming the ip address!**
+Instead, another option seems to be using systemd to configure the networking.
+
+- [There is a guide here](https://major.io/2015/03/26/creating-a-bridge-for-virtual-machines-using-systemd-networkd)
+
+- [Notes mainly from this site](https://www.linux.com/learn/understanding-and-using-systemd)
+- [..And the blind blog](https://blind.guru/tag/bluetooth-pan.html)
+
+systemd can be used to setup the bridge from every boot so you always access the internet through `br0` rather than choosing between `eth0` or `bnep0` (bluetooth).
+
+This only worked if I set the static ip address/ gateway using systemd rather than `dhcpcd.conf`. I couldn't get the DNS part of systemd to work so the standard method (`dhcpcd.conf`) is still used for that.
+
+First remove `eth0` completely from dhcpcd.conf (we don't want eth0 to have an ip address) and set `br0` to (note the removal of ip_address and gateway):
+
 ```
 interface br0
-static ip_address=130.246.77.144/22
-static routers=130.246.76.254
 static domain_name_servers=130.246.8.13
 ```
 
-#### After every reboot
+Enable `systemd-networkd` and setup the network over `systemd` using `pan.network`, `br0.netdev` and `br0.network`.
 
-This script below creates the bridge interface `br0`. After running this, `ifconfig` should show that br0 has the ip address instead of `eth0`. All internet connectivity should remain the same but it will use the `br0` interface which contains the `eth0` as a slave.
+**Note that the static ip address needs to be changed in the br0.network file.**
 
-TODO: Potentially need to set the broadcast address for `br0` but everything is working fine.
-
-##### Host (connected to eth0)
 ```bash
-sudo brctl addbr br0                                # Create the bridge
-sudo brctl addif br0 eth0                           # Add eth0 to the bridge
-sudo ifconfig eth0 0.0.0.0                          # Remove eth0's ip address
-screen -dm /home/pi/fgtk/bt-pan --debug server br0  # Register bluetooth device with the bridge
+sudo systemctl enable systemd-networkd
+sudo cp pan-eth0.network /etc/systemd/network/
+sudo cp pan-bnep0.network /etc/systemd/network/
+sudo cp br0.netdev /etc/systemd/network/
+sudo cp br0.network /etc/systemd/network/
+```
+And reboot!
+
+#### python-systemd
+
+The python module `systemd` is required to run `bt-pan`. I couldn't get the python2 version to install (bt-pan is written in python2). Instead, I installed the python3 version using `sudo apt install python3-systemd` and converted `bt-pan` to python3 (see this directory).
+
+
+#### Starting bluetooth pan server/ client from systemd
+
+##### Server Side
+
+The `bt-pan` server can be run as a systemd service so that it is running from boot. To do this:
+```bash
+sudo cp pan.service /etc/systemd/system/
+sudo systemctl enable pan.service
 ```
 
-Sources:
-- [`brctl` cmds](https://wiki.debian.org/BridgeNetworkConnections)
-- [`sudo ip link set eth0 master br0` ](https://superuser.com/questions/916368/does-a-bridge-between-2-tap-interfaces-need-an-ip-address)
-- [Indepth notes on spanning tree (what happens in a loop?) and forwarding databases](http://linuxcommand.org/man_pages/brctl8.html)
-- [bt-pan and general info for Bluez5](http://blog.fraggod.net/2015/03/28/bluetooth-pan-network-setup-with-bluez-5x.html)
+- To check the status `sudo systemctl status pan`
+- To stop/start/restart: `sudo systemctl stop/start/restart pan`
 
-##### Client (not connected to eth0)
+
+##### Client Side
+Setup as above but this service is simpler (although you can pass the bt address as an argument).
 ```bash
-sudo brctl addbr br0
-sudo brctl addif br0 eth0
-sudo ifconfig eth0 0.0.0.0   # Only needed to stop eth0 claming the ip address
-screen -dm /home/pi/fgtk/bt-pan --debug client -w  B8:27:EB:96:85:A1
-sudo brctl addif br0 bnep0
+sudo cp pan@.service /etc/systemd/system/
+# Start by specifying BT address...
+systemctl start pan@B8:27:EB:96:85:A1
 ```
+This will need to be run after every boot. (Note not using `enable` and no `[Install]` section in the `.service` file)
 
-
-**Note that every time a network connection is dropped (eg unplugging eth0), then eth0 regains an ip address which needs to be removed by setting to 0.0.0.0**
-
-This can lead to interesting situations where a device can act as a bridge for one without eth0 (which can connect to the network fine) at the same time as not being able to connect to the internet.
-
- **See systemd/alternateNetworking.md for alternate setup that avoids this - it is permentant...**
 
 ### NOTE ABOUT STP
 
 **Activating STP** on a bridge caused the STFC network to disable the ethernet port, losing all connection. This means that STP should only be activated on a private network.
 
 Without STP, it is important that no loops are created in the network. Ensure that the bluetooth bridge between the two PIs is only active when one of the PIs doesn't have ethernet connection. (Unless on an isolated network).
+
+[Indepth notes on spanning tree (what happens in a loop?) and forwarding databases](http://linuxcommand.org/man_pages/brctl8.html)
 
 ### Turning bluez to debug mode
 

@@ -16,7 +16,7 @@ def on_connect(client, userdata, rc):
     # Thread is called when a connection to the MQTT broker is attempted
     print("Connected with result code " + str(rc))
     if rc == 0:
-        client.publish(AGENT_NAME + '/private/status', str(int(time.time())) + ' C', qos=1) 
+        client.publish(AGENT_NAME + '/private/status', "C" + str(int(time.time())), qos=1) 
 
 def on_message(client, userdata, message):
     # Thread is called when a message is received from the MQTT broker
@@ -148,7 +148,8 @@ client.on_publish = on_publish
 
 # Set a LWT that is sent to the broker in the event of unexpected disconnection
 # QoS = 0 because it will be confusing if the message is sent again next time that the smart agent connects
-client.will_set(AGENT_NAME + '/private/status', str(int(time.time())) + ' DU', qos=0, retain=True) 
+# No need to send time here because it will be the current time not the time of disconnection
+client.will_set(AGENT_NAME + '/private/status', "DU", qos=0, retain=True) 
 
 # Attempt to connect to the broker 
 client.connect(HOSTNAME, PORT, 60)
@@ -232,7 +233,7 @@ except Exception as e:
     raise e
     
 finally:
-    client.publish(AGENT_NAME + '/private/status', str(int(time.time())) + ' DG ', qos=1) 
+    client.publish(AGENT_NAME + '/private/status', 'DG' + str(int(time.time())), qos=1) 
     client.disconnect()
     for arduino in devices:
         try:

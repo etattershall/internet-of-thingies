@@ -2,5 +2,5 @@
 Name=br0
 
 [Network]
-Address=130.246.77.143/22
+Address=IP_ADDRESS_HERE/22
 Gateway=130.246.76.254

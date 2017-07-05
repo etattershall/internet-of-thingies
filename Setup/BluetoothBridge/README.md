@@ -50,13 +50,14 @@ static domain_name_servers=130.246.8.13
 
 Enable `systemd-networkd` and setup the network over `systemd` using `pan.network`, `br0.netdev` and `br0.network`.
 
-**Note that the static ip address needs to be changed in the br0.network file.**
+**Replace `[PUT YOUR IP ADDRESS HERE]` with your ip address**
 
 ```bash
 sudo systemctl enable systemd-networkd
 sudo cp pan-eth0.network /etc/systemd/network/
 sudo cp pan-bnep0.network /etc/systemd/network/
 sudo cp br0.netdev /etc/systemd/network/
+sudo sed -i "s/IP_ADDRESS_HERE/[PUT YOUR IP ADDRESS HERE]" br0.network
 sudo cp br0.network /etc/systemd/network/
 ```
 And reboot!

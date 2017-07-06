@@ -286,7 +286,7 @@ def updateSmartAgentsOrEdgeDevices(msg, oldSmartAgents):
                 oldSmartAgents[agentID] = []
                 logging.info("Added Smart Agent with id: {}".format(agentID))
                 return True
-        elif(status == STATUS_DISCONNECTED_GRACE
+        elif(status.startswith(STATUS_DISCONNECTED_GRACE)
              or status == STATUS_DISCONNECTED_UNGRACE):
             if msg.retain:  # Skip retained messages, they must be old.
                 logging.debug("Skipping retained disconnect message.")

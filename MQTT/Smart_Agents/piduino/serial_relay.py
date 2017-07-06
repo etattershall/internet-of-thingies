@@ -13,7 +13,7 @@ def on_connect(client, userdata, rc):
     # Thread is called when a connection to the MQTT broker is attempted
     print("Connected with result code " + str(rc))
     if rc == 0:
-        client.publish(AGENT_NAME + '/private/status', str(int(time.time())) + ' C', qos=1) 
+        client.publish(AGENT_NAME + '/private/status', "C" + str(int(time.time())), qos=1) 
 
 def on_message(client, userdata, message):
     # Thread is called when a message is received from the MQTT broker
@@ -170,47 +170,8 @@ def mainloop(client, devices, threads):
                     arduino.shutdown()
                 except:
                     pass
-                
-                print('Unable to read from arduino at ' + str(arduino.name))
-                # Inform the broker that the arduino is unreachable
-                client.publish(AGENT_NAME + '/private/log', 'Disconnected from ' + str(arduino.name), qos=1)
-                
-                # Unsubscribe from communications concerning that arduino
-                client.unsubscribe(AGENT_NAME + '/public/' + str(arduino.name) + '/output/#')
-                # Flag the arduino as disconnected
-                arduino.error = True    
-                
-            if waiting:
-                flag, message = arduino.receive_json()
-                if flag:
-                    print(flag)
-                else:
 
-                    if message != '':
-                        topic = AGENT_NAME + '/public/' + str(arduino.name) +'/input/' + message["topic"]
-                        payload = str(int(time.time())) + ' ' + str(message["payload"])
 
-                        # The mqtt code takes care of buffering messages automatically
-                        client.publish(topic, payload, qos=1)
-                        
-                        # Remember the topic being published by the arduino
-                        arduino.topics.add(message["topic"])
-    
-            
-    # Clean disconnected arduinos out of the list
-    devices = [d for d in devices if not d.error]
-    return client, devices, threads 
-
-def clean_up(client, devices):
-    client.publish(AGENT_NAME + '/private/status', str(int(time.time())) + ' DG ', qos=1) 
-    client.disconnect()
-    for arduino in devices:
-        try:
-            arduino.shutdown()
-        except:
-            pass
-    print('Shutdown was successful')
-    
 if __name__ == "__main__":
     '''
     CONSTANTS:

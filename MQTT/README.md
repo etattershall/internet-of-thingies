@@ -9,7 +9,7 @@ MQTT is a subscription/publication protocol. This means that instead of sending 
 
 Each smart agent posts details about its state using the topic structure shown below. 
 
-PI1/public                          (data that the customer can see)
+Pi1/public                          (data that the customer can see)
           /arduino1/input/sensor1   (e.g. state of an LDR or button)
                          /sensor2
                          ...
@@ -25,20 +25,21 @@ PI1/public                          (data that the customer can see)
            /status                  (connected, disconnected or disconnected ungracefully)
            /edge                    (json list of edge devices (arduinos) for
                                     this PI)
-PI2/public/...
+Pi2/public/...
    /private/...
-PI3/...
-PI4/...
+Pi3/...
+Pi4/...
 ...
 
-The broker services cloud application keeps a dictionary of connected devices. It shares this list with all smart agents on the “broker-services/discover” topic.
+The broker services cloud application keeps a dictionary of connected devices. It shares this list with all smart agents on 
+the “broker-services/discover” topic.
 
-broker-services/discover          (json dict of connected smart agents
-                                   mapping to a list of their edge devices)
+broker-services/discover          (json dict of connected smart agents and their dependent edge devices)
                /request           (request repost status)
                /hello             (each smart agent posts its name on this topic when it first connects)
 
-In the future, if we were to implement an application on the cloud, smart agents would be able to request data from broker-services. They would also be able to restrict access to their data or request its deletion in the same manner.
+In the future, if we were to implement an application on the cloud, smart agents would be able to request data from 
+broker-services. They would also be able to restrict access to their data or request its deletion in the same manner.
 
 ```
 

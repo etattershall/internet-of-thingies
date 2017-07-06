@@ -5,28 +5,41 @@
 
 ## Topics
 ```
-broker-services/discover          (json dict of connected smart agents
-                                   mapping to a list of their edge devices)
-               /request           (request repost status)
-PI1/public/arduino1/input/sensor1 (eg for LED write 1/0 to toggle on/off)
+MQTT is a subscription/publication protocol. This means that instead of sending direct messages to each other, devices subscribe and publish to topics managed by a central broker device. We came up with a structure of standard topics for devices to post on for our prototype application. 
+
+Each smart agent posts details about its state using the topic structure shown below. 
+
+PI1/public                          (data that the customer can see)
+          /arduino1/input/sensor1   (e.g. state of an LDR or button)
                          /sensor2
                          ...
-                   /output/sensor3 (eg write analogue read values here)
+                   /output/sensor3  (e.g. state of an LED)
                           /sensor4
                            ...
           /arduino2/...
           /arduino3/...
           ...
-   /private/log/...
+   /private                         (behind-the-scenes data)
+           /log/...                 (debugging information to be sent to central log)
            /error/...
-           /status                 (Is smart agent connected?)
-           /edge                   (json list of edge devices (arduinos) for
+           /status                  (connected, disconnected or disconnected ungracefully)
+           /edge                    (json list of edge devices (arduinos) for
                                     this PI)
 PI2/public/...
    /private/...
 PI3/...
 PI4/...
 ...
+
+The broker services cloud application keeps a dictionary of connected devices. It shares this list with all smart agents on the “broker-services/discover” topic.
+
+broker-services/discover          (json dict of connected smart agents
+                                   mapping to a list of their edge devices)
+               /request           (request repost status)
+               /hello             (each smart agent posts its name on this topic when it first connects)
+
+In the future, if we were to implement an application on the cloud, smart agents would be able to request data from broker-services. They would also be able to restrict access to their data or request its deletion in the same manner.
+
 ```
 
 ### Setup / Explanation

@@ -2,9 +2,6 @@ import time
 import threading
 import paho.mqtt.client as mqtt
 import piduino
-import datetime
-import socket
-import csv
 
 
 '''
@@ -113,125 +110,98 @@ def connection_thread(arduino):
             client.subscribe(AGENT_NAME + '/public/' + str(arduino.name) + '/output/#', qos=1)
             
     arduino.processing = False
+
+def setup(protocol, HOSTNAME, AGENT_NAME, PORT):
+    '''
+    MQTT CLIENT SETUP:
+        Set up the client and assign the callback functions. Note that the on_connect
+        function does not seem to work on the raspberry pi (either because of 
+        python version, paho version or operating system differences *sigh*)
+    '''
+    client = mqtt.Client(protocol=PROTOCOL)
+    try:
+        client.on_connect = on_connect
+    except Exception as e:
+        print(e)
+    
+    client.on_message = on_message
+    client.on_publish = on_publish
+    
+    # Set a LWT that is sent to the broker in the event of unexpected disconnection
+    # QoS = 0 because it will be confusing if the message is sent again next time that the smart agent connects
+    client.will_set(AGENT_NAME + '/private/status', str(int(time.time())) + ' DU', qos=0, retain=True) 
+    
+    # Attempt to connect to the broker 
+    client.connect(HOSTNAME, PORT, 60)
+    return client
+
+def mainloop(client, devices, threads):
+    # Make connections to arduinos
+    # Check for serial connections to suitable devices
+    comports = piduino.comport_scan('Arduino')
+    
+    
+    for comport in comports:
+        # Check if we are already connected to this device
+        if comport not in [d.comport for d in devices]:
+            # If not, create a new device manager
+            arduino = piduino.SerialDevice(comport)
+            devices.append(arduino)
             
-'''
-CONSTANTS:
-    These values need to be set before use
-'''
-HOSTNAME = "vm219.nubes.stfc.ac.uk"
-PORT = 1883
-AGENT_NAME = 'Coffee_Room'
-
-# If we are serving MQTT on the SCD cloud on Ubuntu 14.04, we are constrained 
-# to using this older protocol
-protocol = mqtt.MQTTv31
-
-'''
-MQTT CLIENT SETUP:
-    Set up the client and assign the callback functions. Note that the on_connect
-    function does not seem to work on the raspberry pi (either because of 
-    python version, paho version or operating system differences *sigh*)
-'''
-
-
-
-client = mqtt.Client(protocol=protocol)
-
-
-try:
-    client.on_connect = on_connect
-except Exception as e:
-    print(e)
+            # Spawn a new thread to handle the process of connection
+            t = threading.Thread(name=comport, target=connection_thread, args=(arduino,))
+            threads.append(t)
+            t.start()
     
-client.on_message = on_message
-client.on_publish = on_publish
-
-# Set a LWT that is sent to the broker in the event of unexpected disconnection
-# QoS = 0 because it will be confusing if the message is sent again next time that the smart agent connects
-client.will_set(AGENT_NAME + '/private/status', str(int(time.time())) + ' DU', qos=0, retain=True) 
-
-# Attempt to connect to the broker 
-client.connect(HOSTNAME, PORT, 60)
-
-
-devices = []
-threads = []
-message_queue = []
-client.loop_start()
-try:
-    while True:
-        # Make connections to arduinos
-        # Check for serial connections to suitable devices
-        comports = piduino.comport_scan('Arduino')
-        
-        
-        for comport in comports:
-            # Check if we are already connected to this device
-            if comport not in [d.comport for d in devices]:
-                # If not, create a new device manager
-                arduino = piduino.SerialDevice(comport)
-                devices.append(arduino)
-                
-                # Spawn a new thread to handle the process of connection
-                t = threading.Thread(name=comport, target=connection_thread, args=(arduino,))
-                threads.append(t)
-                t.start()
-        
-        # Check that we can still see the broker machine
-                
-        # Clean out message queue
-        # Anything that has been sent should be removed
-        # If anything has not been sent in the last 2 seconds...
-        
-        # Receive data
-        for arduino in devices:
-            if arduino.connected and arduino.verified:
-                flag, waiting = arduino.ready()
-                
-                if type(flag) == piduino.NotConnectedError:
-                    # The device has been disconnected! Remove it from our list of verified devices
-                    try:
-                        arduino.shutdown()
-                    except:
-                        pass
-                    
-                    print('Unable to read from arduino at ' + str(arduino.name))
-                    # Inform the broker that the arduino is unreachable
-                    client.publish(AGENT_NAME + '/private/log', 'Disconnected from ' + str(arduino.name), qos=1)
-                    
-                    # Unsubscribe from communications concerning that arduino
-                    client.unsubscribe(AGENT_NAME + '/public/' + str(arduino.name) + '/output/#')
-                    # Flag the arduino as disconnected
-                    arduino.error = True    
-                    
-                if waiting:
-                    flag, message = arduino.receive_json()
-                    if flag:
-                        print(flag)
-                    else:
-
-                        if message != '':
-                            topic = AGENT_NAME + '/public/' + str(arduino.name) +'/input/' + message["topic"]
-                            payload = str(int(time.time())) + ' ' + str(message["payload"])
-
-                            # The mqtt code takes care of buffering messages automatically
-                            client.publish(topic, payload, qos=1)
-                            
-                            # Remember the topic being published by the arduino
-                            arduino.topics.add(message["topic"])
-        
-                
-        # Clean disconnected arduinos out of the list
-        devices = [d for d in devices if not d.error]
-        
-
-                            
-        
-
-except Exception as e:
-    raise e
+    # Check that we can still see the broker machine
+            
+    # Clean out message queue
+    # Anything that has been sent should be removed
+    # If anything has not been sent in the last 2 seconds...
     
-finally:
+    # Receive data
+    for arduino in devices:
+        if arduino.connected and arduino.verified:
+            flag, waiting = arduino.ready()
+            
+            if type(flag) == piduino.NotConnectedError:
+                # The device has been disconnected! Remove it from our list of verified devices
+                try:
+                    arduino.shutdown()
+                except:
+                    pass
+                
+                print('Unable to read from arduino at ' + str(arduino.name))
+                # Inform the broker that the arduino is unreachable
+                client.publish(AGENT_NAME + '/private/log', 'Disconnected from ' + str(arduino.name), qos=1)
+                
+                # Unsubscribe from communications concerning that arduino
+                client.unsubscribe(AGENT_NAME + '/public/' + str(arduino.name) + '/output/#')
+                # Flag the arduino as disconnected
+                arduino.error = True    
+                
+            if waiting:
+                flag, message = arduino.receive_json()
+                if flag:
+                    print(flag)
+                else:
+
+                    if message != '':
+                        topic = AGENT_NAME + '/public/' + str(arduino.name) +'/input/' + message["topic"]
+                        payload = str(int(time.time())) + ' ' + str(message["payload"])
+
+                        # The mqtt code takes care of buffering messages automatically
+                        client.publish(topic, payload, qos=1)
+                        
+                        # Remember the topic being published by the arduino
+                        arduino.topics.add(message["topic"])
+    
+            
+    # Clean disconnected arduinos out of the list
+    devices = [d for d in devices if not d.error]
+    return client, devices, threads 
+
+def clean_up(client, devices):
     client.publish(AGENT_NAME + '/private/status', str(int(time.time())) + ' DG ', qos=1) 
     client.disconnect()
     for arduino in devices:
@@ -240,3 +210,30 @@ finally:
         except:
             pass
     print('Shutdown was successful')
+    
+if __name__ == "__main__":
+    '''
+    CONSTANTS:
+        These values need to be set before use
+    '''
+    HOSTNAME = "vm219.nubes.stfc.ac.uk"
+    PORT = 1883
+    AGENT_NAME = 'Coffee_Room'
+
+    # If we are serving MQTT on the SCD cloud on Ubuntu 14.04, we are constrained 
+    # to using this older protocol
+    PROTOCOL = mqtt.MQTTv31
+
+    devices = []
+    threads = []
+
+    client = setup(PROTOCOL, HOSTNAME, AGENT_NAME, PORT)
+    client.loop_start()
+    try:
+        while True:
+            client, devices, threads = mainloop(client, devices, threads)
+    except Exception as e:
+        raise e
+        
+    finally:
+        clean_up(client, devices)

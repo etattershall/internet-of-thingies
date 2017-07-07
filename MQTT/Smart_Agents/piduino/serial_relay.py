@@ -111,7 +111,7 @@ def connection_thread(arduino):
             
     arduino.processing = False
 
-def setup(protocol, hostname, agent_name, PORT):
+def setup(protocol, hostname, agent_name, port):
     '''
     MQTT CLIENT SETUP:
         Set up the client and assign the callback functions. Note that the on_connect
@@ -135,7 +135,7 @@ def setup(protocol, hostname, agent_name, PORT):
     client.will_set(agent_name + '/private/status', str(int(time.time())) + ' DU', qos=0, retain=True) 
     
     # Attempt to connect to the broker 
-    client.connect(hostname, PORT, 60)
+    client.connect(hostname, port, 60)
     return client
 
 def mainloop(client, agent_name, devices, threads):
@@ -221,7 +221,7 @@ if __name__ == "__main__":
         These values need to be set before use
     '''
     hostname = "vm219.nubes.stfc.ac.uk"
-    PORT = 1883
+    port = 1883
     agent_name = 'Coffee_Room'
 
     # If we are serving MQTT on the SCD cloud on Ubuntu 14.04, we are constrained 
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     devices = []
     threads = []
 
-    client = setup(protocol, hostname, agent_name, PORT)
+    client = setup(protocol, hostname, agent_name, port)
     client.loop_start()
     try:
         while True:

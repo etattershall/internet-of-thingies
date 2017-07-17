@@ -64,13 +64,13 @@ def start_callback():
     '''
     Check input
     '''
-    broker_name = cloud_name_choice.inputbox.get()
-    if broker_name == '':
+    hostname = cloud_name_choice.inputbox.get()
+    if hostname == '':
         status_frame.textbox.insert(tkinter.END, 'Please fill in a cloud name\n')
         status_frame.textbox.see(tkinter.END)
         return None
-    smart_agent_name = user_name_choice.inputbox.get()
-    if smart_agent_name == '':
+    agent_name = user_name_choice.inputbox.get()
+    if agent_name == '':
         status_frame.textbox.insert(tkinter.END, 'Please fill in a user name\n')
         status_frame.textbox.see(tkinter.END)
         return None
@@ -85,17 +85,34 @@ def start_callback():
             status_frame.textbox.insert(tkinter.END, 'Need an integer port: using default (1883)\n')
             port = 1883
             
-    protocol = 
+    protocol = '3.1'
+    
+    devices = []
+    threads = []
+
+    client = serial_relay.setup(protocol, hostname, agent_name, port)
+    client.loop_start()
     status_frame.textbox.see(tkinter.END)
     
+    try:
+        while True:
+            client, devices, threads = serial_relay.mainloop(client, agent_name, devices, threads)
+            status_frame.textbox.see(tkinter.END)
+    except Exception as e:
+        raise e
+        
+    finally:
+        serial_relay.clean_up(client, agent_name, devices)
+        
     
     
     print('START')
     
 def stop_callback():
+    serial_relay.clean_up(client, agent_name, devices)
     print('STOP')
     
-    
+
 SPACING = 10
 BACKGROUND = 'LightSteelBlue1'
 FONT = 'Helvetica'
@@ -126,8 +143,8 @@ left_centre_frame = tkinter.Frame(centre_frame, bg=BACKGROUND, borderwidth=1)
 
 
 
-cloud_name_choice = InputBox(left_centre_frame, "Cloud network address")
-user_name_choice = InputBox(left_centre_frame, "This computer's name")
+cloud_name_choice = InputBox(left_centre_frame, "Cloud network address", default="vm219.nubes.stfc.ac.uk")
+user_name_choice = InputBox(left_centre_frame, "This computer's name", default="test")
 port_choice = InputBox(left_centre_frame, "Cloud network port (advanced)", default='1883')
 
 status_frame = ScrollTextFrame(left_centre_frame, SPACING, "Status", 12)
@@ -159,12 +176,5 @@ stop_button.pack(side=tkinter.RIGHT, padx=SPACING, pady=SPACING)
 start_button = tkinter.Button(bottom_frame, text="START", command=start_callback)
 start_button.pack(side=tkinter.RIGHT)
 
-
-'''
-When the start button is pressed:
-    - The program checks if all the fields have been filled in.
-    - In status: Input looks okay
-    - In status: Attempting to connect to the broker
-'''
 
 root.mainloop()

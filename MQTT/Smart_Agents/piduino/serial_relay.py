@@ -12,10 +12,9 @@ HOSTNAME = "vm219.nubes.stfc.ac.uk"
 PORT = 1883
 AGENTNAME = 'Emma_PC'
 
-TOPIC_ROOT = AGENTNAME
-TOPIC_STATUS = AGENTNAME + "/private/status"
-TOPIC_EDGE =  AGENTNAME + "/private/edge/"
-TOPIC_DISCOVERY = TOPIC_ROOT + "/discover"
+# If we are serving MQTT on the SCD cloud on Ubuntu 14.04, we are constrained 
+# to using this older protocol
+PROTOCOL = '3.1'
 
 STATUS_CONNECTED = "C"
 STATUS_DISCONNECTED_GRACE = "DG"
@@ -24,17 +23,41 @@ STATUS_DISCONNECTED_UNGRACE = "DU"
 logging.basicConfig(level=logging.INFO)
 
 
-global SPACING
-global BACKGROUND
-global FONT
+SPACING = 2
+BACKGROUND = 'LightSteelBlue1'
+FONT = 'Helvetica'
 
-global MODE
-global STATE
-global messagebox
-global statusbox
+MODE = 'NoGUI'
+LOGGING = True
+VERBOSE = False
+STATE = 'waiting'
 
+def share(info, error=False, message=False):
+    global VERBOSE
+    global LOGGING
+    global MODE
+    global statusbox
+    global messagebox
+    if VERBOSE:
+        if error:
+            print("ERROR: " + info)
+        else:
+            print(info)
+    if LOGGING:
+        if error:
+            logging.error(info)
+        else:
+            logging.info(info)
+    if MODE == 'GUI':
+        if message:
+            messagebox.append(info)
+        else:
+            if error:
+                statusbox.append('ERROR: ' + info)
+            else:
+                statusbox.append(info)
 
-
+            
 '''
 BROKER THREADS:
     The threads below are called to handle the smart agents connections with the 
@@ -44,37 +67,40 @@ def handle_connect(mqttClient, userdata, rc):
     """After connection with MQTT broker established, check for errors and
     subscribe to topics."""
     global connected
+    global shouldBeConnected
     if rc != 0:
-        logging.error("Connection returned result: " + Mqtt.connack_string(rc))
+        share("Connection returned result: " + Mqtt.connack_string(rc), error=True)
         connected = False
     else:
-        logging.info("Connection to MQTT broker succeeded.")
-        mqttClient.publish(TOPIC_STATUS, STATUS_CONNECTED + str(int(time.time())), qos=1)
+        share("Connection to MQTT broker succeeded.")
+        mqttClient.publish(TOPIC_STATUS, str(int(time.time())) + ' ' + STATUS_CONNECTED, qos=1)
+        mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + STATUS_CONNECTED, qos=1)
         connected = True
+        shouldBeConnected = True
+        # Subscribe to discovery
+        mqttClient.subscribe(TOPIC_DISCOVERY, qos=1)
 
 def handle_message(mqttClient, userdata, message):
-    global messagebox
     # Thread is called when a message is received from the MQTT broker
     # If the message is intended for one of our edge devices...
     if message.topic.startswith(AGENTNAME + '/public/'):
         # Locate the appropriate edge device
         destination_id = message.topic.split('/')[2]
-        for arduino in devices:
-            if str(arduino.name) == str(destination_id):
+        for device in connectedEdgeDevices:
+            if str(device.name) == str(destination_id):
                 # Package the message for the a
                 relay = {
                          'topic': message.topic.split('/')[4],
                          'payload': message.payload.decode()
                          }
                 # Send the message
-                if arduino.connected and arduino.verified:
-                    flag = arduino.send(relay)
+                if device.connected and device.verified:
+                    flag = device.send(relay)
                     if flag:
                         raise flag
                         
-    # Deal with gui actions
-    if MODE == 'GUI':
-        messagebox.append(message.topic + ': ' + message.payload.decode())
+    share(message.topic + ': ' + message.payload.decode(), message=True)
+
 
 def handle_publish(mqttClient, userdata, mid):
     """Called when a publish handshake is finished (depending on the qos)"""
@@ -83,17 +109,17 @@ def handle_publish(mqttClient, userdata, mid):
 
 def handle_subscribe(mqttClient, userdata, mid, granted_qos):
     """Called after the MQTT client successfully subscribes to a topic."""
-    logging.info("Subscribed to a topic with mid: {}".format(mid))
+    pass
 
 def handle_disconnect(mqttClient, userdata, rc):
     """Callback when disconnected from MQTT broker"""
     global connected
     connected = False
     if shouldBeConnected:
-        logging.error("Disconnected from MQTT ungracefully.")
+        share("Disconnected from MQTT ungracefully.", error=True)
     else:
         mqttClient.loop_stop()
-        logging.info("Disconnected from MQTT gracefully.")
+        share("Disconnected from MQTT gracefully.")
 
 '''
 ARDUINO THREADS:
@@ -105,16 +131,13 @@ def handshake_protocol(device, timeout=5):
     Given a device, request a handshake. If handshake is completed,
     return the name of the device. Otherwise return None.
     '''
-    global statusbox
     # Clean out the buffers
     flag = device.flush()
     if flag:
         raise flag
     
     # Request a handshake
-    logging.info('Sending handshake request to new device')
-    if MODE == 'GUI':
-        statusbox.append('Sending handshake request')
+    share('Sending handshake request to new device')
     flag = device.handshake_request()
     if flag:
         raise flag
@@ -133,8 +156,10 @@ def handshake_protocol(device, timeout=5):
                         return message["payload"]
     return None
             
-def connection_thread(device, client):
-    global statusbox
+def connection_thread(device, mqttClient):
+    '''
+    Handles the connection to an edge device
+    '''
     # handles the connection
     device.processing = True
     # Connect
@@ -151,22 +176,23 @@ def connection_thread(device, client):
         name = handshake_protocol(device)
         if name == None:
             device.error = True
-            logging.error('Handshake failed!')
+            share('Handshake failed!', error=True)
         else:
-            logging.info('Handshake was successful: we are now connected to device ' + str(name))
-            if MODE == 'GUI':
-                statusbox.append('Handshake was successful: we are now connected to device ' + str(name))
+            share('Handshake was successful: we are now connected to device ' + str(name))
             device.name = name
             device.verified = True
             
             # Inform the broker of this new arduino
-            client.publish(AGENTNAME + '/private/log', 'Connected to ' + str(name), qos=1)
-            
+            mqttClient.publish(TOPIC_EDGE + str(name), str(int(time.time())) + ' ' + 
+                                   str(name) + ' ' + STATUS_CONNECTED, qos=1)
+            mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + 
+                                   str(name) + ' ' + STATUS_CONNECTED, qos=1)
+
             # Subscribe to communications from broker concerning this arduino
-            client.subscribe(AGENTNAME + '/public/' + str(device.name) + '/output/#', qos=1)
+            mqttClient.subscribe(AGENTNAME + '/public/' + str(device.name) + '/output/#', qos=1)
             
             if MODE == 'GUI':
-                client.subscribe(AGENTNAME + '/#', qos=1)
+                mqttClient.subscribe(AGENTNAME + '/#', qos=1)
     device.processing = False
 
 '''
@@ -177,40 +203,49 @@ def setup():
     threaded loop."""
     global connectedEdgeDevices
     global shouldBeConnected
-    global messagesInTransit
     global runningThreads
     global connected
+    
+    global TOPIC_ROOT
+    global TOPIC_STATUS
+    global TOPIC_EDGE
+    global TOPIC_DISCOVERY
+    global TOPIC_HELLO
+    
+    TOPIC_ROOT = AGENTNAME
+    TOPIC_STATUS = AGENTNAME + "/private/status"
+    TOPIC_EDGE =  AGENTNAME + "/private/edge/"
+    TOPIC_DISCOVERY = "broker-services/discover" 
+    TOPIC_HELLO = "broker-services/hello/" + AGENTNAME
     # Assume connected unless proved otherwise
-    connected = True
+    connected = False
     connectedEdgeDevices = []
     shouldBeConnected = False
-    messagesInTransit = dict()
     runningThreads = []
 
     if PROTOCOL ==  '3.1':
-        client = Mqtt.Client(protocol=Mqtt.MQTTv31)
+        mqttClient = Mqtt.Client(protocol=Mqtt.MQTTv31)
     else:
-        client = Mqtt.Client(protocol=Mqtt.MQTTv311)
+        mqttClient = Mqtt.Client(protocol=Mqtt.MQTTv311)
     try:
-        client.on_connect = handle_connect
+        mqttClient.on_connect = handle_connect
     except Exception as e:
-        print(e)
+        share(e, error=True)
     
-    client.on_message = handle_message
-    client.on_publish = handle_publish
-    client.on_subscribe = handle_subscribe
-    client.on_disconnect = handle_disconnect
+    mqttClient.on_message = handle_message
+    mqttClient.on_publish = handle_publish
+    mqttClient.on_subscribe = handle_subscribe
+    mqttClient.on_disconnect = handle_disconnect
     # Set a LWT that is sent to the broker in the event of unexpected disconnection
     # QoS = 0 because it will be confusing if the message is sent again next time that the smart agent connects
-    client.will_set(TOPIC_STATUS, str(int(time.time())) + ' DU', qos=0, retain=True) 
+    mqttClient.will_set(TOPIC_STATUS, str(int(time.time())) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=0, retain=True) 
     
     # Attempt to connect to the broker 
-    logging.info("Connecting to MQTT broker...")
-    client.connect(HOSTNAME, PORT, 60)
-    shouldBeConnected = True
-    return client
+    share("Connecting to MQTT broker...")
+    mqttClient.connect(HOSTNAME, PORT, 60)
+    return mqttClient
 
-def mainloop(client):
+def mainloop(mqttClient):
     global connectedEdgeDevices
     global runningThreads
     global connected
@@ -218,8 +253,14 @@ def mainloop(client):
     # Fix connection
     if not connected and shouldBeConnected:
         connected = True
-        logging.info("Reconnecting to MQTT broker...")
-        client.connect(HOSTNAME, PORT, 60)
+        share("Reconnecting to MQTT broker...")
+        mqttClient.connect(HOSTNAME, PORT, 60)
+        # Remind the broker about the existing arduinos
+        for device in connectedEdgeDevices:
+            mqttClient.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + 
+                                   str(device.name) + ' ' + STATUS_CONNECTED, qos=1)
+            mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + 
+                                   str(device.name) + ' ' + STATUS_CONNECTED, qos=1)
     
     # Make connections to arduinos
     # Check for serial connections to suitable devices
@@ -234,15 +275,9 @@ def mainloop(client):
             connectedEdgeDevices.append(device)
             
             # Spawn a new thread to handle the process of connection
-            t = threading.Thread(name=comport, target=connection_thread, args=(device, client,))
+            t = threading.Thread(name=comport, target=connection_thread, args=(device, mqttClient,))
             runningThreads.append(t)
             t.start()
-    
-    # Check that we can still see the broker machine
-            
-    # Clean out message queue
-    # Anything that has been sent should be removed
-    # If anything has not been sent in the last 2 seconds...
     
     # Receive data
     for device in connectedEdgeDevices:
@@ -256,13 +291,15 @@ def mainloop(client):
                 except:
                     pass
                 
-                logging.warning('Unable to read from arduino at ' + str(device.name))
+                share('Unable to read from arduino at ' + str(device.name), error=True)
                 # Inform the broker that the arduino is unreachable
-                client.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + 
-                               str(device.name) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
-                
+                mqttClient.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + 
+                                   str(device.name) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
+                mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + 
+                                   str(device.name) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
+
                 # Unsubscribe from communications concerning that arduino
-                client.unsubscribe(AGENTNAME + '/public/' + str(device.name) + '/output/#')
+                mqttClient.unsubscribe(AGENTNAME + '/public/' + str(device.name) + '/output/#')
                 # Flag the arduino as disconnected
                 device.error = True    
                 
@@ -277,7 +314,7 @@ def mainloop(client):
                         payload = str(int(time.time())) + ' ' + str(message["payload"])
 
                         # The mqtt code takes care of buffering messages automatically
-                        client.publish(topic, payload, qos=1)
+                        mqttClient.publish(topic, payload, qos=1)
                         
                         # Remember the topic being published by the arduino
                         device.topics.add(message["topic"])
@@ -285,26 +322,33 @@ def mainloop(client):
             
     # Clean disconnected arduinos out of the list
     connectedEdgeDevices = [d for d in connectedEdgeDevices if not d.error]
-    return client
+    return mqttClient
 
-def clean_up(client):
+def clean_up(mqttClient):
     global connectedEdgeDevices
     global shouldBeConnected
     
     for device in connectedEdgeDevices:
         try:
             device.shutdown()
-            logging.info('Disconnected from device ' + str(device.name))
-            client.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1)
+            share('Disconnected from device ' + str(device.name))
+            mqttClient.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + 
+                               str(device.name) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1)
+            mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + 
+                               str(device.name) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1)
         except:
-            logging.warning('Encountered problems when disconnecting from device ' + str(device.name))
-            client.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
+            share('Encountered problems when disconnecting from device ' + str(device.name), error=True)
+            mqttClient.publish(TOPIC_EDGE + str(device.name), str(int(time.time())) + ' ' + 
+                               str(device.name) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
+            mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + 
+                               str(device.name) + ' ' + STATUS_DISCONNECTED_UNGRACE, qos=1)
             pass
         
-    client.publish(TOPIC_STATUS, str(int(time.time())) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1) 
+    mqttClient.publish(TOPIC_STATUS, str(int(time.time())) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1) 
+    mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1)
     shouldBeConnected = False
-    client.disconnect()
-    logging.info('Shutdown was successful')
+    mqttClient.disconnect()
+    share('Shutdown was successful')
 
 '''
 GUI WIDGETS AND CALLBACKS
@@ -378,43 +422,35 @@ def start_callback():
     
 def stop_callback():
     global STATE
-    clean_up(client)
+    if STATE == 'running':
+        clean_up(mqttClient)
     STATE = 'waiting'
-    print('STOP')
+    share('STOP button pressed')
 
+def on_closing():
+    global STATE
+    if STATE == 'running':
+        clean_up(mqttClient)
+    STATE = 'ended'
+    try:
+        root.destroy()    
+    except:
+        pass
     
-    
-if __name__ == "__main__":
-
-    MODE = 'NoGUI'
-    STATE = 'waiting'
-    
+if __name__ == "__main__":    
     if MODE != 'GUI':
-        HOSTNAME = "vm219.nubes.stfc.ac.uk"
-        PORT = 1883
-        AGENTNAME = 'Emma_PC'
-    
-        # If we are serving MQTT on the SCD cloud on Ubuntu 14.04, we are constrained 
-        # to using this older protocol
-        PROTOCOL = '3.1'
-    
-        client = setup()
-        client.loop_start()
+        mqttClient = setup()
+        mqttClient.loop_start()
         try:
             while True:
-                client = mainloop(client)
+                mqttClient = mainloop(mqttClient)
         except Exception as e:
             raise e
             
         finally:
-            clean_up(client)
+            clean_up(mqttClient)
             
     else:
-        
-        SPACING = 2
-        BACKGROUND = 'LightSteelBlue1'
-        FONT = 'Helvetica'
-        
         root = tkinter.Tk("Internet of thingies")
         root.configure(bg=BACKGROUND)
         
@@ -473,6 +509,7 @@ if __name__ == "__main__":
         start_button = tkinter.Button(bottom_frame, text="START", command=start_callback)
         start_button.pack(side=tkinter.RIGHT)
         
+        root.protocol("WM_DELETE_WINDOW", on_closing)
         
         try:
             while True:
@@ -484,12 +521,17 @@ if __name__ == "__main__":
                     messagebox = []
                     statusbox = []
                     try:
-                        client = setup()
-                        client.loop_start()
+                        mqttClient = setup()
+                        mqttClient.loop_start()
                         STATE = 'running'
                     except Exception as e:
+                        share(e, error=True)
                         status_frame.textbox.insert(tkinter.END, e + '\n')
                         status_frame.textbox.see(tkinter.END)
+                        try:
+                            clean_up(mqttClient)
+                        except:
+                            pass
                         STATE = 'waiting'
                     
                      
@@ -504,17 +546,20 @@ if __name__ == "__main__":
                             status_frame.textbox.see(tkinter.END)
                             statusbox = []
 
-                        client, devices, threads = mainloop(client, devices, threads)
+                        mqttClient = mainloop(mqttClient)
                         status_frame.textbox.see(tkinter.END)
                     except Exception as e:
                         raise e
-            
-                root.update()
+                if STATE != 'ended':
+                    root.update()
+                else:
+                    break
         except Exception as e:
             raise e
             
         finally:
-            clean_up(client, devices)
+            if STATE == 'running':
+                clean_up(mqttClient)
 
 
 

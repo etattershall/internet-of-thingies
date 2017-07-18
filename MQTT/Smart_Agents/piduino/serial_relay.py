@@ -79,11 +79,12 @@ def handle_connect(mqttClient, userdata, rc):
         shouldBeConnected = True
         # Subscribe to discovery
         mqttClient.subscribe(TOPIC_DISCOVERY, qos=1)
+        mqttClient.subscribe(TOPIC_PING, qos=1)
 
 def handle_message(mqttClient, userdata, message):
     # Thread is called when a message is received from the MQTT broker
     # If the message is intended for one of our edge devices...
-    if message.topic.startswith(AGENTNAME + '/public/'):
+    if message.topic.startswith(AGENTNAME + '/public'):
         # Locate the appropriate edge device
         destination_id = message.topic.split('/')[2]
         for device in connectedEdgeDevices:
@@ -98,6 +99,13 @@ def handle_message(mqttClient, userdata, message):
                     flag = device.send(relay)
                     if flag:
                         raise flag
+                        
+    elif message.topic.startswith(AGENTNAME + '/private'):
+        if message.topic == TOPIC_PING:
+            mqttClient.publish(TOPIC_PING, str(int(time.time())) + ' ' + STATUS_CONNECTED, qos=1)
+            
+        elif message.topic == TOPIC_DISCOVERY:
+            pass
                         
     share(message.topic + ': ' + message.payload.decode(), message=True)
 
@@ -211,12 +219,14 @@ def setup():
     global TOPIC_EDGE
     global TOPIC_DISCOVERY
     global TOPIC_HELLO
+    global TOPIC_PING
     
     TOPIC_ROOT = AGENTNAME
     TOPIC_STATUS = AGENTNAME + "/private/status"
     TOPIC_EDGE =  AGENTNAME + "/private/edge/"
     TOPIC_DISCOVERY = "broker-services/discover" 
     TOPIC_HELLO = "broker-services/hello/" + AGENTNAME
+    TOPIC_PING = AGENTNAME + '/private/ping'
     # Assume connected unless proved otherwise
     connected = False
     connectedEdgeDevices = []

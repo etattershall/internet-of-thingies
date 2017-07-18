@@ -61,7 +61,7 @@ def handle_connect(mqttClient, userdata, rc):
         shouldBeConnected = True
         
         # Subscribe to anything posted in the Hello topic
-        mqttClient.subscribe(TOPIC_HELLO, qos=1)
+        mqttClient.subscribe(TOPIC_HELLO + '/#', qos=1)
 
     
 
@@ -70,7 +70,7 @@ def handle_message(mqttClient, userdata, message):
     """
     global connectedDevices
     print(message.topic, message.payload.decode())
-    if message.topic.startswith('broker-services/hello'):
+    if message.topic.startswith(TOPIC_HELLO):
         agentname = ''
         try:
             agentname = message.topic.split('/')[2]
@@ -98,7 +98,9 @@ def handle_message(mqttClient, userdata, message):
                 else:
                     if status != STATUS_CONNECTED:
                         connectedDevices[agentname].remove(edgedevice)
-                
+                        
+    elif message.topic == TOPIC_PING:
+        mqttClient.publish(TOPIC_PING, str(int(time.time())) + ' ' + STATUS_CONNECTED, qos=1)
             
 
 def handle_publish(mqttClient, userdata, mid):
@@ -135,10 +137,12 @@ def setup():
     global TOPIC_EDGE
     global TOPIC_DISCOVERY
     global TOPIC_HELLO
+    global TOPIC_PING
     
     TOPIC_STATUS = "broker-services/status"
     TOPIC_DISCOVERY = "broker-services/discover" 
-    TOPIC_HELLO = "broker-services/hello/#" 
+    TOPIC_HELLO = "broker-services/hello"
+    TOPIC_PING = "broker-services/ping"
     # Assume connected unless proved otherwise
     connected = False
     shouldBeConnected = False

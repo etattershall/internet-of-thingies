@@ -19,15 +19,18 @@ while True:
 
 	if client.waiting():
 		newmessage = client.receive()
-		
-	## Behind the scenes
-
-	**The MQTT message topic is:**
-
-	mf2c/[destination id]/private
-						 /protected
-						 /public
 ```
+	
+## Behind the scenes
+
+**The MQTT message topic is:**
+
+```
+mf2c/[destination id]/private
+					 /protected
+					 /public
+```
+
 **The MQTT payload is**
 
 [signature(encrypted checksum)|flattenedjson(encrypted with JWT if private)]

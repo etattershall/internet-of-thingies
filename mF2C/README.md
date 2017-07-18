@@ -9,10 +9,10 @@ client = mf2c.connect()
 while True:
 	mymessage = mf2c.message(
 		recipients = <list>, 	# List of signatures of other users
-		security = <int>, 		# public=0, protected=1, private=2.
-								# Defaults to private
+		security = <int>, 	# public=0, protected=1, private=2.
+					# Defaults to private
 		payload = <str>,
-		qos = 1					# Default value is 1, invisible argument
+		qos = 1			# Default value is 1, invisible argument
 	)
 
 	client.send(mymessage)
@@ -27,8 +27,8 @@ while True:
 
 ```
 mf2c/[destination id]/private
-					 /protected
-					 /public
+		     /protected
+		     /public
 ```
 
 **The MQTT payload is**

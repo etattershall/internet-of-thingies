@@ -1,7 +1,7 @@
 # mF2C module Architecture
 
 ## The Public API
-
+```python
 import mf2c
 
 client = mf2c.connect()
@@ -27,19 +27,19 @@ while True:
 	mf2c/[destination id]/private
 						 /protected
 						 /public
-
+```
 **The MQTT payload is**
 
 [signature(encrypted checksum)|flattenedjson(encrypted with JWT if private)]
 
 Where:
-
+```
 flattenedjson = {
 	source_device: 00000001,
 	recipients: [00000002, 00000003],
 	payload: 'Do you fancy a coffee?'
 }
-
+```
 Notes:
 - The signature has a fixed length
 - Device IDs are fixed length (e.g. 8 characters?)

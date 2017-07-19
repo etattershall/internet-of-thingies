@@ -4,7 +4,8 @@
 ```python
 import mf2c
 
-client = mf2c.connect()
+client = mf2c.Client()
+client.connect()
 
 while True:
 	mymessage = mf2c.message(

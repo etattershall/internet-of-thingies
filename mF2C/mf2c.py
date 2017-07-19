@@ -191,7 +191,7 @@ class Agent():
         for message in incoming_messages:
             # Deal with ping requests
             if message.topic == self.PINGREQ:
-                self.ping(json.loads(message.payload))
+                self.pingack(json.loads(message.payload))
             elif message.topic == self.PINGACK:
                 pingacks.append(json.loads(message.payload))
             elif message.topic == self.PUBLIC:
@@ -218,7 +218,10 @@ class Agent():
                 self.client.publish(topic, json.dumps(payload), qos=qos)
 
     
-    def ping(self, payload):
+    def pingack(self, payload):
+        """
+        Respond to a ping from another device with a ping acknowledgement
+        """
         # ping is always public
         try:
             recipient = payload['source']
@@ -231,7 +234,17 @@ class Agent():
                    }
 
         self.client.publish(topic, json.dumps(payload), qos=2)
-            
+     
+    def ping(self, recipient):
+        # ping is always public
+        topic = 'mf2c/' + str(recipient) + '/public/pingreq'
+        payload = {
+                    'timestamp': timestamp(),
+                    'source': self.agentID
+                   }
+
+        self.client.publish(topic, json.dumps(payload), qos=2)
+        
     def clean_up(self):
         self.client.disconnect()
         self.client.loop_stop()
@@ -251,7 +264,9 @@ if __name__ == "__main__":
             # Believe me, if you don't introduce a delay, this program will 
             # happily take up 90% of your CPU...
             time.sleep(0.1)
+            
             messages, pingacks = smart_agent.loop()
+        
     except Exception as e:
         raise e
     finally:

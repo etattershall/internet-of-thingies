@@ -111,7 +111,7 @@ def handle_message(mqttClient, userdata, message):
 
 
 def handle_publish(mqttClient, userdata, mid):
-    """Called when a publish handshake is finished (depending on the qos)"""
+     
     pass
 
 
@@ -122,6 +122,7 @@ def handle_subscribe(mqttClient, userdata, mid, granted_qos):
 def handle_disconnect(mqttClient, userdata, rc):
     """Callback when disconnected from MQTT broker"""
     global connected
+    print('HANDLE DISCONNECT CALLED')
     connected = False
     if shouldBeConnected:
         share("Disconnected from MQTT ungracefully.", error=True)
@@ -260,7 +261,8 @@ def mainloop(mqttClient):
     global runningThreads
     global connected
     global shouldBeConnected
-    # Fix connection
+
+    # Fix connection NOT NEEDED
     if not connected and shouldBeConnected:
         connected = True
         share("Reconnecting to MQTT broker...")
@@ -335,9 +337,10 @@ def mainloop(mqttClient):
     return mqttClient
 
 def clean_up(mqttClient):
+    
     global connectedEdgeDevices
     global shouldBeConnected
-    
+    print('CLEAN UP')
     for device in connectedEdgeDevices:
         try:
             device.shutdown()
@@ -358,6 +361,7 @@ def clean_up(mqttClient):
     mqttClient.publish(TOPIC_HELLO, str(int(time.time())) + ' ' + STATUS_DISCONNECTED_GRACE, qos=1)
     shouldBeConnected = False
     mqttClient.disconnect()
+    mqttClient.loop_stop()
     share('Shutdown was successful')
 
 '''

@@ -7,19 +7,28 @@ import mf2c
 client = mf2c.Client()
 client.connect()
 
-while True:
-	mymessage = mf2c.message(
-		recipients = <list>, 	# List of signatures of other users
-		security = <int>, 	# public=0, protected=1, private=2.
-					# Defaults to private
-		payload = <str>,
-		qos = 1			# Default value is 1, invisible argument
-	)
+try:
+	while True:
+		client.loop()
 
-	client.send(mymessage)
+		# Deal with new messages
+		if client.waiting():
+			newmessage = client.receive()
 
-	if client.waiting():
-		newmessage = client.receive()
+		# Send our own messages
+		mymessage = mf2c.message(
+			recipients = <list>, 	# List of signatures of other users
+			security = <int>, 	# public=0, protected=1, private=2.
+						# Defaults to private
+			payload = <str>,
+			qos = 1			# Default value is 1, invisible argument
+		)
+
+		client.send(mymessage)
+except Exception as e:
+	raise e
+finally:
+	client.disconnect()
 ```
 	
 ## Behind the scenes

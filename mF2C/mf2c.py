@@ -232,7 +232,9 @@ class Agent():
 
         self.client.publish(topic, json.dumps(payload), qos=2)
             
-    
+    def clean_up(self):
+        self.client.disconnect()
+        self.client.loop_stop()
 
 
 
@@ -246,9 +248,12 @@ if __name__ == "__main__":
     
     try:
         while True:
+            # Believe me, if you don't introduce a delay, this program will 
+            # happily take up 90% of your CPU...
+            time.sleep(0.1)
             messages, pingacks = smart_agent.loop()
     except Exception as e:
         raise e
     finally:
         # clean up
-        pass
+        smart_agent.clean_up()

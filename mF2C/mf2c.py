@@ -1,8 +1,7 @@
-"""Example Google style docstrings.
+"""mF2C-MQTT
 
-This module demonstrates documentation as specified by the `Google Python
-Style Guide`_. Docstrings may extend over multiple lines. Sections are created
-with a section header and a colon followed by a block of indented text.
+This module uses MQTT and JSON based encryption to provide a secure method of
+direct messaging in which encryption is handled by a trusted central server.
 
 Example:
     Examples can be given using either the ``Example`` or ``Examples``
@@ -71,13 +70,19 @@ def timestamp():
 def on_connect(mqtt_client, userdata, flags, rc):
     """
     Called when a connect acknowledgement (CONNACK) is received. 
+    
+    This function sets a global connack flag when broker connection has been
+    confirmed.
     """
     global connack
     logging.info("Connected to broker")
     connack = True
     
 def on_disconnect(mqtt_client, userdata, rc):
-
+    """
+    This function is called when a disconnect packet is sent from this client.
+    It is also used if the broker itself disconnects.
+    """
     logging.info('Disconnected from broker')
     
 def on_publish(mqtt_client, userdata, mid):
@@ -88,12 +93,16 @@ def on_publish(mqtt_client, userdata, mid):
     pass
 
 def on_message(mqtt_client, userdata, message):
+    """
+    Called when a message is received.
+    
+    This function adds the new messsage to the module-level message buffer. We
+    have chosen to use a buffer rather than dealing with messages in this callback
+    function because it means we can provide greater flexibility for users
+    """
     global incoming_message_buffer
     incoming_message_buffer.append(message)
 
-def on_subscribe(mqtt_client, userdata, mid, granted_qos):
-    logging.info('Successfully subscibed')
-    
 class TimeOutError(Exception):
     def __init__(self, value):
         self.value = value
@@ -138,6 +147,7 @@ class Agent():
         # keepalive is maximum number of seconds allowed between communications
         # with the broker. If no other messages are sent, the client will send a
         # ping request at this interval
+        logging.info('Attempting to connect to broker at ' + self.hostname)
         mqtt_client.connect(self.hostname, self.port, keepalive=60)
         
         # Force function to block until connack is sent from the broker, or timeout
@@ -164,9 +174,11 @@ class Agent():
         # Start the loop. This method is preferable to repeatedly calling loop
         # since it handles reconnections automatically. It is non-blocking and 
         # handles interactions with the broker in the background.
+        logging.info('Starting loop')
         self.client.loop_start()
     
     def loop(self):
+        # housekeeping
         global incoming_message_buffer
         # Reconnection is handled at a lower level: it's not necessary to make
         # reconnection attempts here - in fact, doing so will raise a connection 
@@ -253,7 +265,6 @@ class Agent():
 
 
 if __name__ == "__main__":
-    #client = Client('vm219.nubes.stfc.ac.uk', '0')
     hostname = "vm219.nubes.stfc.ac.uk"
     port = 1883
     smart_agent = Agent(hostname, '00000001')

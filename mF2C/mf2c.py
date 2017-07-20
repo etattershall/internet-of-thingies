@@ -66,6 +66,23 @@ def decrypt(encrypted_string):
 def timestamp():
     # Returns an integer UNIX time
     return str(int(time.time()))
+   
+def topic_public(agentID):
+    return 'mf2c/' + str(agentID) + '/public'
+
+def topic_protected(agentID):
+    return 'mf2c/' + str(agentID) + '/protected'
+    
+def topic_private(agentID):
+    return 'mf2c/' + str(agentID) + '/private'
+    
+def topic_pingreq(agentID):
+    return 'mf2c/' + str(agentID) + '/public/pingreq'
+
+def topic_pingack(agentID):
+    return 'mf2c/' + str(agentID) + '/public/pingack'
+    
+
     
 def on_connect(mqtt_client, userdata, flags, rc):
     """
@@ -108,13 +125,17 @@ class TimeOutError(Exception):
         self.value = value
 
 class Agent():
+    """
+    
+    """
     def __init__(self, hostname, agentID, port=1883, protocol='3.1'):
-        
+        # Check input
         assert type(hostname) is str
         assert type(agentID) is str
         assert type(port) is int
         assert protocol in ['3.1', '3.1.1']
 
+        # Set class level variables
         self.hostname = hostname
         self.agentID = agentID
         self.port = port
@@ -123,11 +144,12 @@ class Agent():
         elif protocol == '3.1.1':
             self.protocol = mqtt.MQTTv311
 
-        self.PUBLIC = 'mf2c/' + agentID + '/public'
-        self.PROTECTED = 'mf2c/' + agentID + '/protected'
-        self.PRIVATE = 'mf2c/' + agentID + '/private'
-        self.PINGREQ = self.PUBLIC + '/ping'
-        self.PINGACK = self.PUBLIC + '/pingack'
+        # Set the topics that will be subscribed to
+        self.PUBLIC = topic_public(self.agentID)
+        self.PROTECTED = topic_protected(self.agentID)
+        self.PRIVATE = topic_private(self.agentID)
+        self.PINGREQ = topic_pingreq(self.agentID)
+        self.PINGACK = topic_pingack(self.agentID)
     
     def setup(self, timeout=20):
         global connack
@@ -138,7 +160,10 @@ class Agent():
         # in an environment where disconnects are frequent.
         mqtt_client = mqtt.Client(protocol=self.protocol, client_id=self.agentID, clean_session=False)
         mqtt_client.on_connect = on_connect
-        
+        mqtt_client.on_message = on_message
+        mqtt_client.on_publish = on_publish
+        mqtt_client.on_disconnect = on_disconnect
+                
         # Set the LWT
         # If the client disconnects without calling disconnect, the broker will
         # publish this message on its behalf
@@ -203,27 +228,26 @@ class Agent():
         for message in incoming_messages:
             # Deal with ping requests
             if message.topic == self.PINGREQ:
-                self.pingack(json.loads(message.payload))
+                self.pingack(json.loads(message.payload.decode()))
             elif message.topic == self.PINGACK:
-                pingacks.append(json.loads(message.payload))
+                pingacks.append(json.loads(message.payload.decode()))
             elif message.topic == self.PUBLIC:
-                parsed_messages.append(json.loads(message.payload))
+                parsed_messages.append(json.loads(message.payload.decode()))
 
         return parsed_messages, pingacks
         
     def send(self, recipients, payload, security=0, qos=1):
+        # Check input
         assert type(recipients) == list
         assert len(recipients) > 0
         assert security in [0, 1, 2]
         assert type(payload) == dict
-        # payload is assumed to be a jsonic object
-        # the keyword 'source' is protected
 
         # Nothing needs to be encrypted if the level of security is set to
         # public
         if security == 0:
             for recipient in recipients:
-                topic = 'mf2c/' + str(recipient) + '/public'
+                topic = topic_public(recipient)
                 payload['timestamp'] = timestamp()
                 if 'source' not in payload.keys():
                     payload['source'] = self.agentID
@@ -239,7 +263,7 @@ class Agent():
             recipient = payload['source']
         except:
             return
-        topic = 'mf2c/' + str(recipient) + '/public/pingack'
+        topic = topic_pingack(recipient)
         payload = {
                     'timestamp': timestamp(),
                     'source': self.agentID
@@ -249,7 +273,7 @@ class Agent():
      
     def ping(self, recipient):
         # ping is always public
-        topic = 'mf2c/' + str(recipient) + '/public/pingreq'
+        topic = topic_pingreq(recipient)
         payload = {
                     'timestamp': timestamp(),
                     'source': self.agentID
@@ -267,17 +291,26 @@ class Agent():
 if __name__ == "__main__":
     hostname = "vm219.nubes.stfc.ac.uk"
     port = 1883
-    smart_agent = Agent(hostname, '00000001')
+    smart_agent = Agent(hostname, '0001')
     smart_agent.setup()
     
+    oldtimestamp = int(timestamp())
     try:
         while True:
             # Believe me, if you don't introduce a delay, this program will 
             # happily take up 90% of your CPU...
             time.sleep(0.1)
             
+            # Get the messages in the buffer and deal with ping requests
             messages, pingacks = smart_agent.loop()
-        
+            if messages != []:
+                for message in messages:
+                    print(message)
+            
+            # Send a message every 10 seconds
+            if int(timestamp()) - oldtimestamp >= 10:
+                smart_agent.send(['0002', '0003'], {'payload': 'Hello from Windows Computer'}, security=0, qos=2)
+                oldtimestamp = int(timestamp())
     except Exception as e:
         raise e
     finally:

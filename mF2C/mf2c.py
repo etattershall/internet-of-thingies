@@ -66,7 +66,11 @@ def decrypt(encrypted_string):
 def timestamp():
     # Returns an integer UNIX time
     return str(int(time.time()))
-   
+    
+    
+"""
+Define topic conventions
+"""
 def topic_public(agentID):
     return 'mf2c/' + str(agentID) + '/public'
 
@@ -81,8 +85,6 @@ def topic_pingreq(agentID):
 
 def topic_pingack(agentID):
     return 'mf2c/' + str(agentID) + '/public/pingack'
-    
-
     
 def on_connect(mqtt_client, userdata, flags, rc):
     """
@@ -152,6 +154,31 @@ class Agent():
         self.PINGACK = topic_pingack(self.agentID)
     
     def setup(self, timeout=20):
+        """
+        This method sets up the actual MQTT client, assigns all callback 
+        functions for event handling and sets a last will and testament (LWT)
+        message. 
+        
+        It then attempts to connect to the broker. The connection call
+        is blocking; it continues until a connection acknowlegement message is 
+        received from the broker or until the timeout is reached.
+        
+        After connection has been acheived, it subscribes to the topics:
+            mf2c/[agentID]/public
+            mf2c/[agentID]/protected
+            mf2c/[agentID]/private
+            mf2c/[agentID]/public/pinreq
+            mf2c/[agentID]/public/pingack
+            
+        If another device wants to contact this smart agent, it must publish to
+        one of these topics. 
+        
+        Finally, this method starts the MQTT loop running on a separate thread.
+        This loop thread handles publishing and receiving messages, and also 
+        routinely pings the broker to check the connection status. If the
+        connection is lost, the thread automatically buffers messages and 
+        attempts to reconnect
+        """
         global connack
         global incoming_message_buffer
         # Blocks until connected or timeout
@@ -203,21 +230,16 @@ class Agent():
         self.client.loop_start()
     
     def loop(self):
-        # housekeeping
+        """
+        This loop method can be run periodically to read messages out of the
+        incoming message buffer. It also deals with replying to ping requests
+        from other devices.
+        
+        Note that it is not necessary to handle reconnection to the broker in 
+        this function; that task is done by the paho-mqtt loop function. 
+        """
         global incoming_message_buffer
-        # Reconnection is handled at a lower level: it's not necessary to make
-        # reconnection attempts here - in fact, doing so will raise a connection 
-        # refused error and crash the program. If instead the program waits until
-        # the broker comes back online, it will reconnect at that point and attempt
-        # to publish the buffer of unsent messages (messages w/ qos > 0)
         
-
-        
-            
-        
-        # Decode messages if necessary
-        # each message has: [security, source, payload, timestamp]
-
         # dump all incoming messages into a list and empty the string
         incoming_messages = incoming_message_buffer
         # empty the buffer
@@ -229,14 +251,19 @@ class Agent():
             # Deal with ping requests
             if message.topic == self.PINGREQ:
                 self.pingack(json.loads(message.payload.decode()))
+            # Deal with acknowledgements to our own ping requests
             elif message.topic == self.PINGACK:
                 pingacks.append(json.loads(message.payload.decode()))
+            # Parse non-encrypted messages
             elif message.topic == self.PUBLIC:
                 parsed_messages.append(json.loads(message.payload.decode()))
 
         return parsed_messages, pingacks
         
     def send(self, recipients, payload, security=0, qos=1):
+        """
+        Method sends a specified jsonic payload to a list of recipients.
+        """
         # Check input
         assert type(recipients) == list
         assert len(recipients) > 0
@@ -256,7 +283,9 @@ class Agent():
     
     def pingack(self, payload):
         """
-        Respond to a ping from another device with a ping acknowledgement
+        Respond to a ping from another device with a ping acknowledgement.
+        
+        This method is called automatically when a 
         """
         # ping is always public
         try:
@@ -271,15 +300,20 @@ class Agent():
 
         self.client.publish(topic, json.dumps(payload), qos=2)
      
-    def ping(self, recipient):
-        # ping is always public
-        topic = topic_pingreq(recipient)
-        payload = {
-                    'timestamp': timestamp(),
-                    'source': self.agentID
-                   }
-
-        self.client.publish(topic, json.dumps(payload), qos=2)
+    def ping(self, recipients):
+        """
+        Send a ping request to one or more recipients
+        """
+        assert type(recipients) == list
+        assert len(recipients) > 0
+        for recipient in recipients:
+            topic = topic_pingreq(recipient)
+            payload = {
+                        'timestamp': timestamp(),
+                        'source': self.agentID
+                       }
+    
+            self.client.publish(topic, json.dumps(payload), qos=2)
         
     def clean_up(self):
         self.client.disconnect()
@@ -291,8 +325,7 @@ class Agent():
 if __name__ == "__main__":
     hostname = "vm219.nubes.stfc.ac.uk"
     port = 1883
-    smart_agent = Agent(hostname, '0001')
-    smart_agent.setup()
+    smart_agent = Agent(hostname, '0001').setup()
     
     oldtimestamp = int(timestamp())
     try:

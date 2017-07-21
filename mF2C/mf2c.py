@@ -1,41 +1,9 @@
-"""mF2C-MQTT
+"""
+mF2C-MQTT
 
 This module uses MQTT and JSON based encryption to provide a secure method of
 direct messaging in which encryption is handled by a trusted central server.
 
-Example:
-    Examples can be given using either the ``Example`` or ``Examples``
-    sections. Sections support any reStructuredText formatting, including
-    literal blocks::
-
-        $ python example_google.py
-
-Section breaks are created by resuming unindented text. Section breaks
-are also implicitly created anytime a new section starts.
-
-Attributes:
-    module_level_variable1 (int): Module level variables may be documented in
-        either the ``Attributes`` section of the module docstring, or in an
-        inline docstring immediately following the variable.
-
-        Either form is acceptable, but the two should not be mixed. Choose
-        one convention to document module level variables and be consistent
-        with it.
-
-Todo:
-    * For module TODOs
-    * You have to also use ``sphinx.ext.todo`` extension
-
-.. _Google Python Style Guide:
-   http://google.github.io/styleguide/pyguide.html
-
-MY NOTES
-There are other ways to do security: TLS is reportedly a good option. However, 
-I found it more challenging to set up, since it requires mqtt 3.1.1., and many 
-of the operating systems I have access to (Scientific Linux 7, Ubuntu 14.04 
-and Raspian) do not have all the relevant up-to-date packages. Therefore, we
-have chosen to explicitly handle encryption/decryption at the payload level. 
-Another advantage of this approach is its modifiability and transparancy.
 """
 
 import logging
@@ -51,7 +19,7 @@ __status__ = "Pre-Alpha"
 STATUS_CONNECTED = "C"
 STATUS_DISCONNECTED_GRACE = "DG"
 STATUS_DISCONNECTED_UNGRACE = "DU"
-HUB = '00000000'
+HUB = 'broker_services'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -85,6 +53,9 @@ def topic_pingreq(agentID):
 
 def topic_pingack(agentID):
     return 'mf2c/' + str(agentID) + '/public/pingack'
+
+def topic_status():
+    return 'mf2c/broker_services/status'
     
 def on_connect(mqtt_client, userdata, flags, rc):
     """
@@ -128,7 +99,8 @@ class TimeOutError(Exception):
 
 class Agent():
     """
-    
+    This class handles connection to a given MQTT broker. 
+    It also facilitates sending and receiving messages
     """
     def __init__(self, hostname, agentID, port=1883, protocol='3.1'):
         # Check input
@@ -152,6 +124,7 @@ class Agent():
         self.PRIVATE = topic_private(self.agentID)
         self.PINGREQ = topic_pingreq(self.agentID)
         self.PINGACK = topic_pingack(self.agentID)
+        self.STATUS = topic_status()
     
     def setup(self, timeout=20):
         """
@@ -181,8 +154,8 @@ class Agent():
         """
         global connack
         global incoming_message_buffer
-        # Blocks until connected or timeout
-        # Setting clean_session = True means that subsciption information and 
+
+        # Setting clean_session = False means that subsciption information and 
         # queued messages are retained after the client disconnects. It is suitable
         # in an environment where disconnects are frequent.
         mqtt_client = mqtt.Client(protocol=self.protocol, client_id=self.agentID, clean_session=False)
@@ -195,7 +168,11 @@ class Agent():
         # If the client disconnects without calling disconnect, the broker will
         # publish this message on its behalf
         # retain should be set to true
-        
+        #mqtt_client.will_set(self.STATUS, 
+        #                     self.package({'status': STATUS_DISCONNECTED_UNGRACE}), 
+        #                     qos=0, retain=True) 
+
+        # Connect to the broker
         # keepalive is maximum number of seconds allowed between communications
         # with the broker. If no other messages are sent, the client will send a
         # ping request at this interval
@@ -213,8 +190,6 @@ class Agent():
                 raise TimeOutError("The program timed out while trying to connect to the broker!")
                 break
             
-        
-        
         # When connected, subscribe to the relevant channels
         mqtt_client.subscribe([(self.PUBLIC, 1), (self.PROTECTED, 1),
                               (self.PRIVATE, 1), (self.PINGREQ, 1),
@@ -222,7 +197,10 @@ class Agent():
                              ])
         
         self.client = mqtt_client
+        
+        # Set a message buffer
         incoming_message_buffer = []
+
         # Start the loop. This method is preferable to repeatedly calling loop
         # since it handles reconnections automatically. It is non-blocking and 
         # handles interactions with the broker in the background.
@@ -259,8 +237,20 @@ class Agent():
                 parsed_messages.append(json.loads(message.payload.decode()))
 
         return parsed_messages, pingacks
-        
-    def send(self, recipients, payload, security=0, qos=1):
+    
+    def package(self, payload_dict):
+        """
+        Method adds supplementary information to the supplied payload. At 
+        present the added items are:
+            - timestamp (UNIX time, str)
+            - source (ID of this agent, str)
+        """
+        payload_dict['timestamp'] = timestamp()
+        if 'source' not in payload_dict.keys():
+            payload_dict['source'] = self.agentID
+        return json.dumps(payload_dict)
+
+    def send(self, recipients, payload_dict, security=0, qos=1):
         """
         Method sends a specified jsonic payload to a list of recipients.
         """
@@ -268,20 +258,18 @@ class Agent():
         assert type(recipients) == list
         assert len(recipients) > 0
         assert security in [0, 1, 2]
-        assert type(payload) == dict
+        assert type(payload_dict) == dict
 
         # Nothing needs to be encrypted if the level of security is set to
         # public
         if security == 0:
             for recipient in recipients:
                 topic = topic_public(recipient)
-                payload['timestamp'] = timestamp()
-                if 'source' not in payload.keys():
-                    payload['source'] = self.agentID
-                self.client.publish(topic, json.dumps(payload), qos=qos)
+                payload_str = self.package(payload_dict)
+                self.client.publish(topic, payload_str, qos=qos)
 
     
-    def pingack(self, payload):
+    def pingack(self, payload_dict):
         """
         Respond to a ping from another device with a ping acknowledgement.
         
@@ -289,16 +277,16 @@ class Agent():
         """
         # ping is always public
         try:
-            recipient = payload['source']
+            recipient = payload_dict['source']
         except:
             return
         topic = topic_pingack(recipient)
-        payload = {
-                    'timestamp': timestamp(),
-                    'source': self.agentID
-                   }
+        payload_dict = {
+                        'timestamp': timestamp(),
+                        'source': self.agentID
+                       }
 
-        self.client.publish(topic, json.dumps(payload), qos=2)
+        self.client.publish(topic, json.dumps(payload_dict), qos=2)
      
     def ping(self, recipients):
         """
@@ -308,25 +296,23 @@ class Agent():
         assert len(recipients) > 0
         for recipient in recipients:
             topic = topic_pingreq(recipient)
-            payload = {
+            payload_dict = {
                         'timestamp': timestamp(),
                         'source': self.agentID
                        }
     
-            self.client.publish(topic, json.dumps(payload), qos=2)
+            self.client.publish(topic, json.dumps(payload_dict), qos=2)
         
     def clean_up(self):
         self.client.disconnect()
         self.client.loop_stop()
 
 
-
-
 if __name__ == "__main__":
-    hostname = "vm219.nubes.stfc.ac.uk"
+    hostname = "vm69.nubes.stfc.ac.uk"
     port = 1883
-    smart_agent = Agent(hostname, '0001').setup()
-    
+    smart_agent = Agent(hostname, '0001')
+    smart_agent.setup()
     oldtimestamp = int(timestamp())
     try:
         while True:

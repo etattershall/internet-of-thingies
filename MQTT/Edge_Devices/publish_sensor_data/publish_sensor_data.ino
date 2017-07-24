@@ -8,15 +8,15 @@ dht DHT;
 #define DHT11_PIN 5
 
 // Define the pins used for inputs and outputs
-bool dht_present = false;
-int digital_inputs [0] = {};
+bool dht_present = true;
+int digital_inputs [1] = {7};
 int analog_inputs [1] = {A0};
 int digital_outputs [0] = {};
 int analog_outputs [0] = {};
 
 // Choose names for the inputs and outputs
 // Note: don't use A5, since we are using this pin to set the random seed
-String digital_inputs_names [0] = {};
+String digital_inputs_names [1] = {"Movement"};
 String analog_inputs_names [1] = {"LDR"};
 
 String digital_outputs_names [0] = {};

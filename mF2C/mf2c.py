@@ -9,6 +9,9 @@ direct messaging in which encryption is handled by a trusted central server.
 import logging
 import time
 import json
+from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256
+from Crypto import Random
 import paho.mqtt.client as mqtt
 
 __author__ = "Emma Tattershall & Callum Iddon"
@@ -32,7 +35,7 @@ def decrypt(encrypted_string):
     return plaintext
 
 def timestamp():
-    # Returns an integer UNIX time
+    # Returns a string UNIX time
     return str(int(time.time()))
     
     
@@ -48,6 +51,9 @@ def topic_protected(name):
 def topic_private(name):
     return 'mf2c/' + str(name) + '/private'
     
+def topic_handshake(name):
+    return 'mf2c/' + str(name) + '/public/handshake'
+    
 def topic_pingreq(name):
     return 'mf2c/' + str(name) + '/public/pingreq'
 
@@ -56,6 +62,7 @@ def topic_pingack(name):
 
 def topic_status():
     return 'mf2c/broker_services/status'
+
     
 def on_connect(mqtt_client, userdata, flags, rc):
     """
@@ -121,7 +128,12 @@ class Client():
 
         # Set the topics that will be subscribed to
         self.STATUS = topic_status()
-    
+        self.BROKER_KEY = topic_key()
+        
+        # Set a new random generator and create a RSA key pair
+        random_generator = Random.new().read
+        self.key = RSA.generate(1024, random_generator)
+        self.public_key = self.key.publickey()
     
     def package(self, payload_dict):
         """
@@ -197,8 +209,8 @@ class SmartAgent(Client):
         self.PRIVATE = topic_private(self.name)
         self.PINGREQ = topic_pingreq(self.name)
         self.PINGACK = topic_pingack(self.name)
-
-    
+        self.HANDSHAKE = topic_handshake(self.name)
+        
     def setup(self, timeout=20):
         """
         This method sets up the actual MQTT client, assigns all callback 
@@ -226,8 +238,9 @@ class SmartAgent(Client):
         attempts to reconnect
         """
         global connack
+        global handshake
         global incoming_message_buffer
-
+        
         # Setting clean_session = False means that subsciption information and 
         # queued messages are retained after the client disconnects. It is suitable
         # in an environment where disconnects are frequent.
@@ -263,19 +276,18 @@ class SmartAgent(Client):
                 raise TimeOutError("The program timed out while trying to connect to the broker!")
                 break
         
-        # Send a hello message to broker services
-        mqtt_client.publish(self.STATUS, 
-                     self.package({'status': STATUS_CONNECTED}), 
-                     qos=1)
-        
         # When connected, subscribe to the relevant channels
         mqtt_client.subscribe([(self.PUBLIC, 1), (self.PROTECTED, 1),
                               (self.PRIVATE, 1), (self.PINGREQ, 1),
-                              (self.PINGACK, 1)
+                              (self.PINGACK, 1), (self.HANDSHAKE, 1)
                              ])
         
         self.client = mqtt_client
         
+        # Deal with handshake
+        handshake = False
+        
+            
         # Set a message buffer
         incoming_message_buffer = []
 
@@ -284,7 +296,14 @@ class SmartAgent(Client):
         # handles interactions with the broker in the background.
         logging.info('Starting loop')
         self.client.loop_start()
-    
+      
+    def send_handshake(self):
+        self.publish(self.STATUS, 
+                            self.package({'status': STATUS_CONNECTED, 
+                                          'public_key': self.public_key.exportKey().decode()
+                                          }), 
+                            qos=1)
+                            
     def loop(self):
         """
         This loop method can be run periodically to read messages out of the
@@ -294,6 +313,7 @@ class SmartAgent(Client):
         Note that it is not necessary to handle reconnection to the broker in 
         this function; that task is done by the paho-mqtt loop function. 
         """
+        global handshake
         global incoming_message_buffer
         
         # dump all incoming messages into a list and empty the string
@@ -305,7 +325,9 @@ class SmartAgent(Client):
         pingacks = []
         for message in incoming_messages:
             # Deal with ping requests
-            if message.topic == self.PINGREQ:
+            if message.topic == self.HANDSHAKE:
+                
+            elif message.topic == self.PINGREQ:
                 self.pingack(json.loads(message.payload.decode()))
             # Deal with acknowledgements to our own ping requests
             elif message.topic == self.PINGACK:
@@ -386,12 +408,19 @@ class BrokerServices(Client):
             if time.time() - start_time > timeout:
                 raise TimeOutError("The program timed out while trying to connect to the broker!")
                 break
-        
+            
+        # Share the broker's public
+        mqtt_client.publish(self.BROKER_KEY, 
+                            self.package({'public_key': self.public_key.exportKey().decode()}), 
+                            qos=1, retain=True)
+                            
         # When connected, subscribe to the relevant channels
         mqtt_client.subscribe(self.STATUS, 1)
         
         self.client = mqtt_client
         
+
+                            
         # Set a message buffer
         incoming_message_buffer = []
 
@@ -401,6 +430,12 @@ class BrokerServices(Client):
         logging.info('Starting loop')
         self.client.loop_start()
     
+    def respond_handshake(self, agent_name):
+        self.publish(topic_handshake(agent_name), 
+                            self.package({
+                                          }), 
+                            qos=1)
+                            
     def loop(self):
         """
         This loop method can be run periodically to read messages out of the
@@ -416,26 +451,35 @@ class BrokerServices(Client):
         incoming_messages = incoming_message_buffer
         # empty the buffer
         incoming_message_buffer = []
+        parsed_messages= []
 
         for message in incoming_messages:
             # Add new devices to the dictionary
             if message.topic == self.STATUS:
                 try:
                     payload = json.loads(message.payload.decode())
+                    parsed_messages.append(payload)
                     # If we have already met the device...
                     if payload['source'] in self.devices.keys():
                         # And it would like to disconnect...
                         if payload['status'] != 'C':
                             # Remove it from our dictionary
                             del self.devices[payload['source']]
+                            logging.info('Device ' + payload['source'] + ' disconnected')
                     # If we do not recognise the device...
                     else:
                         # And it would like to connect...
                         if payload['status'] == 'C':
                             # Add it to our dictionary
-                            self.devices[payload['source']] = ''
+                            try:
+                                self.devices[payload['source']] = RSA.importKey(payload['public_key'].encode())
+                                logging.info('Device ' + payload['source'] + ' connected')
+                            except Exception as e:
+                                print(e)
+                                logging.error(e)
                 except:
                     logging.info('Error while reading message: ' + str(message.payload))
+        return parsed_messages
     
     def clean_up(self):
         self.client.disconnect()
@@ -462,7 +506,7 @@ if __name__ == "__main__":
             
             # Send a message every 10 seconds
             if int(timestamp()) - oldtimestamp >= 10:
-                smart_agent.send(['0002', '0003'], {'payload': 'Hello from Windows Computer'}, security=0, qos=2)
+                smart_agent.send(['Cheney'], {'payload': "Hello from Emma's Computer"}, security=0, qos=2)
                 oldtimestamp = int(timestamp())
     except Exception as e:
         raise e

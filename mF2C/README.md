@@ -5,7 +5,7 @@
 import mf2c
 
 smart_agent = mf2c.SmartAgent()
-smart_agent.setup(hostname='vm219.nubes.stfc.ac.uk', name='A')
+smart_agent.setup(hostname=<name of your broker machine>, name='A')
 
 try:
 	while True:

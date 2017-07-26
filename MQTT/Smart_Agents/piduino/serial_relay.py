@@ -491,7 +491,7 @@ if __name__ == "__main__":
         
         
         
-        cloud_name_choice = InputBox(left_centre_frame, "Cloud network address", default="vm219.nubes.stfc.ac.uk")
+        cloud_name_choice = InputBox(left_centre_frame, "Cloud network address", default=<name of your host machine>)
         user_name_choice = InputBox(left_centre_frame, "This computer's name", default="test")
         port_choice = InputBox(left_centre_frame, "Cloud network port (advanced)", default='1883')
         

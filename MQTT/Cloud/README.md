@@ -99,5 +99,5 @@ The app can be run with
 - python3 app.py
 
 Point your browser to e.g.
-- http://vm219.nubes.stfc.ac.uk:5000/
+- http://<name of your host machine>:5000/
 to see the app in action.

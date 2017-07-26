@@ -8,7 +8,7 @@ Handles encryption/decryption for clients and stores a database of public keys.
 import time
 import mf2c
 
-hostname = "vm69.nubes.stfc.ac.uk"
+hostname = <name of your host machine>
 port = 1883
 broker_agent = mf2c.BrokerServices(hostname, 'broker_services')
 broker_agent.setup()

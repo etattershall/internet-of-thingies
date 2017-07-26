@@ -6,7 +6,7 @@ from sys import version_info
 
 assert version_info >= (3, 0)
 
-HOSTNAME = "vm219.nubes.stfc.ac.uk"
+HOSTNAME = <name of your host machine>
 PORT = 1883
 AGENTNAME = 'broker-services'
 

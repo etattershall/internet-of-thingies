@@ -26,14 +26,21 @@ HUB = 'broker_services'
 
 logging.basicConfig(level=logging.INFO)
 
-def encrypt(plaintext):
-    encrypted_string = plaintext
-    return encrypted_string
+def encrypt(payload, destination_public_key):
+    # Payload data can be anything; a list, a string, a dictionary...
+    payload = json.dumps(payload)
+    encrypted_payload = destination_public_key.encrypt(payload.encode(), 32)
+    return encrypted_payload[0]
     
 def decrypt(encrypted_string):
     plaintext = encrypted_string
     return plaintext
 
+def generate_signature(name, public_key):
+    hashed_name = SHA256.new(name.encode()).digest()
+    signature = public_key.sign(hashed_name, '')
+    return signature
+    
 def timestamp():
     # Returns a string UNIX time
     return str(int(time.time()))
@@ -50,9 +57,6 @@ def topic_protected(name):
     
 def topic_private(name):
     return 'mf2c/' + str(name) + '/private'
-    
-def topic_handshake(name):
-    return 'mf2c/' + str(name) + '/public/handshake'
     
 def topic_pingreq(name):
     return 'mf2c/' + str(name) + '/public/pingreq'
@@ -84,31 +88,40 @@ def on_disconnect(mqtt_client, userdata, rc):
     
 def on_publish(mqtt_client, userdata, mid):
     """
-    Called when a publish acknowledgement (PUBACK) is received. 
-    PUBACKs will only be sent if the message has a QoS > 0
+    This function is called when a publish acknowledgement (PUBACK) is received. 
+    PUBACKs will only be sent if the message has a QoS > 0.
+    
+    At present, this function is not used.
     """
     pass
 
 def on_message(mqtt_client, userdata, message):
     """
-    Called when a message is received.
+    This function is called when a message is received.
     
-    This function adds the new messsage to the module-level message buffer. We
-    have chosen to use a buffer rather than dealing with messages in this callback
+    It adds the new messsage to the module-level message buffer. We have chosen 
+    to use a buffer rather than dealing with messages in this callback
     function because it means we can provide greater flexibility for users
     """
     global incoming_message_buffer
     incoming_message_buffer.append(message)
 
 class TimeOutError(Exception):
+    """
+    Timout Error is called when the time taken to receive a connection 
+    acknowledgement packet exceeds the user-defined wait time.
+    """
     def __init__(self, value):
         self.value = value
 
 
 class Client():
     """
-    This class handles connection to a given MQTT broker. 
-    It also facilitates sending and receiving messages
+    Client is the base class for the Smart Agent and Broker Agent classes. It 
+    sets class level variables and creates a RSA key pair when it is initialised.
+    
+    It also contains the methods used in sending a message, and sending and 
+    receiving pings since these are the same for any kind of agent.
     """
     def __init__(self, hostname, name, port, protocol):
         # Check input
@@ -121,6 +134,8 @@ class Client():
         self.hostname = hostname
         self.name = name
         self.port = port
+        # Set protocol. When using older machines in any part of your system,
+        # there may only be support for version 3.1
         if protocol == '3.1':
             self.protocol = mqtt.MQTTv31
         elif protocol == '3.1.1':
@@ -135,7 +150,7 @@ class Client():
         self.key = RSA.generate(1024, random_generator)
         self.public_key = self.key.publickey()
     
-    def package(self, payload_dict):
+    def package(self, payload_dict, security=0):
         """
         Method adds supplementary information to the supplied payload. At 
         present the added items are:
@@ -145,7 +160,16 @@ class Client():
         payload_dict['timestamp'] = timestamp()
         if 'source' not in payload_dict.keys():
             payload_dict['source'] = self.name
-        return json.dumps(payload_dict)
+
+        if security != 0:
+            payload_dict['signature'] = generate_signature(self.name, self.public_key)
+            
+        if security < 2:
+            return json.dumps(payload_dict)
+        else:
+            # Encrypt the payload of the message
+            payload_dict['payload'] = encrpyt(payload, broker_public_key)
+
 
     def send(self, recipients, payload_dict, security=0, qos=1):
         """
@@ -159,11 +183,13 @@ class Client():
 
         # Nothing needs to be encrypted if the level of security is set to
         # public
-        if security == 0:
-            for recipient in recipients:
-                topic = topic_public(recipient)
-                payload_str = self.package(payload_dict)
-                self.client.publish(topic, payload_str, qos=qos)
+        for recipient in recipients:
+            topic = topic_public(recipient)
+            # Package the message with a timestamp and information about the
+            # source. If security > 0, add a signature. If security==2, encrypt
+            # the payload.
+            payload_str = self.package(payload_dict, security)
+            self.client.publish(topic, payload_str, qos=qos)
 
     
     def pingack(self, payload_dict):
@@ -191,7 +217,6 @@ class Client():
         assert type(recipients) == list
         assert len(recipients) > 0
         for recipient in recipients:
-            topic = topic_pingreq(recipient)
             payload_dict = {
                         'timestamp': timestamp(),
                         'source': self.name
@@ -199,8 +224,20 @@ class Client():
     
             self.client.publish(topic, json.dumps(payload_dict), qos=2)
 
+    def send_handshake(self):
+        # Sends a handshake request. Broker
+    
+        pass
+            # Send handshake request
+            # Listen for handshake reply
+            # Send on mf2c/broker_services/status
+            # Listen on normal public inbox.
         
 class SmartAgent(Client):
+    """
+    This class extends the standard Client class.
+ 
+    """
     def __init__(self, hostname, name, port=1883, protocol='3.1'):
         Client.__init__(self, hostname, name, port, protocol)
         # Set the topics that will be subscribed to
@@ -210,6 +247,8 @@ class SmartAgent(Client):
         self.PINGREQ = topic_pingreq(self.name)
         self.PINGACK = topic_pingack(self.name)
         self.HANDSHAKE = topic_handshake(self.name)
+        
+        self.broker_public_key = None
         
     def setup(self, timeout=20):
         """
@@ -238,7 +277,6 @@ class SmartAgent(Client):
         attempts to reconnect
         """
         global connack
-        global handshake
         global incoming_message_buffer
         
         # Setting clean_session = False means that subsciption information and 
@@ -284,12 +322,21 @@ class SmartAgent(Client):
         
         self.client = mqtt_client
         
-        # Deal with handshake
-        handshake = False
-        
-            
         # Set a message buffer
         incoming_message_buffer = []
+
+        # Do a blocking call
+        self.send_handshake()
+        while self.broker_public_key == None:
+            time.sleep(0.1)
+            mqtt_client.loop()
+            # Check the message buffer
+            if incoming_message_buffer != []:
+                for message in incoming_message_buffer:
+                    if message.topic == self.HANDSHAKE:
+                        # Check whether it is a broker key message.
+                incoming_message_buffer = []
+            
 
         # Start the loop. This method is preferable to repeatedly calling loop
         # since it handles reconnections automatically. It is non-blocking and 
@@ -298,7 +345,7 @@ class SmartAgent(Client):
         self.client.loop_start()
       
     def send_handshake(self):
-        self.publish(self.STATUS, 
+        self.client.publish(self.STATUS, 
                             self.package({'status': STATUS_CONNECTED, 
                                           'public_key': self.public_key.exportKey().decode()
                                           }), 
@@ -325,9 +372,8 @@ class SmartAgent(Client):
         pingacks = []
         for message in incoming_messages:
             # Deal with ping requests
-            if message.topic == self.HANDSHAKE:
-                
-            elif message.topic == self.PINGREQ:
+
+            if message.topic == self.PINGREQ:
                 self.pingack(json.loads(message.payload.decode()))
             # Deal with acknowledgements to our own ping requests
             elif message.topic == self.PINGACK:
@@ -487,7 +533,7 @@ class BrokerServices(Client):
         
         
 if __name__ == "__main__":
-    hostname = "vm69.nubes.stfc.ac.uk"
+    hostname = <name of your host machine>
     port = 1883
     smart_agent = SmartAgent(hostname, '0001')
     smart_agent.setup()

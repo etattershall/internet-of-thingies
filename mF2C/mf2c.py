@@ -67,6 +67,9 @@ def topic_pingack(name):
 def topic_status():
     return 'mf2c/broker_services/status'
 
+def topic_handshake(name):
+    return 'mf2c/' + str(name) + '/public/handshake'
+    
     
 def on_connect(mqtt_client, userdata, flags, rc):
     """
@@ -143,7 +146,6 @@ class Client():
 
         # Set the topics that will be subscribed to
         self.STATUS = topic_status()
-        self.BROKER_KEY = topic_key()
         
         # Set a new random generator and create a RSA key pair
         random_generator = Random.new().read
@@ -166,9 +168,9 @@ class Client():
             
         if security < 2:
             return json.dumps(payload_dict)
-        else:
+        #else:
             # Encrypt the payload of the message
-            payload_dict['payload'] = encrpyt(payload, broker_public_key)
+            #payload_dict['payload'] = encrpyt(payload, broker_public_key)
 
 
     def send(self, recipients, payload_dict, security=0, qos=1):
@@ -181,15 +183,33 @@ class Client():
         assert security in [0, 1, 2]
         assert type(payload_dict) == dict
 
-        # Nothing needs to be encrypted if the level of security is set to
-        # public
-        for recipient in recipients:
-            topic = topic_public(recipient)
-            # Package the message with a timestamp and information about the
-            # source. If security > 0, add a signature. If security==2, encrypt
-            # the payload.
-            payload_str = self.package(payload_dict, security)
-            self.client.publish(topic, payload_str, qos=qos)
+        # Add metadata to the payload
+        # Add a timestamp (integer unix time) and the source ID to the payload
+        payload_dict['timestamp'] = timestamp()
+        if 'source' not in payload_dict.keys():
+            payload_dict['source'] = self.name
+
+        # For protected and private messages, a signature must be added
+        if security in [1,2]:
+            payload_dict['signature'] = generate_signature(self.name, self.public_key)
+            payload_dict['public_key'] = self.public_key.exportKey().decode()
+            
+        
+        # Send the message
+        # For public and protected messages, the payload does not need to be
+        # encrypted and can be sent straight to each recipient
+        if security in [0,1]:
+            for recipient in recipients:
+                topic = topic_public(recipient)
+                payload_str = json.dumps(payload_dict)
+                self.client.publish(topic, payload_str, qos=qos)
+         
+        # For private messages, the recipients list must be encluded in the payload.
+        # The entire payload must be encrypted
+        # The message must be sent to the broker
+        else:
+            topic = topic_private('broker_services')
+            
 
     
     def pingack(self, payload_dict):
@@ -222,16 +242,9 @@ class Client():
                         'source': self.name
                        }
     
-            self.client.publish(topic, json.dumps(payload_dict), qos=2)
+            self.client.publish(topic_pingreq(recipient), json.dumps(payload_dict), qos=2)
 
-    def send_handshake(self):
-        # Sends a handshake request. Broker
-    
-        pass
-            # Send handshake request
-            # Listen for handshake reply
-            # Send on mf2c/broker_services/status
-            # Listen on normal public inbox.
+
         
 class SmartAgent(Client):
     """
@@ -278,6 +291,7 @@ class SmartAgent(Client):
         """
         global connack
         global incoming_message_buffer
+        global broker_public_key
         
         # Setting clean_session = False means that subsciption information and 
         # queued messages are retained after the client disconnects. It is suitable
@@ -293,7 +307,7 @@ class SmartAgent(Client):
         # publish this message on its behalf
         # retain should be set to true
         mqtt_client.will_set(self.STATUS, 
-                             self.package({'status': STATUS_DISCONNECTED_UNGRACE}), 
+                             self.status_message(STATUS_DISCONNECTED_UNGRACE), 
                              qos=0, retain=True) 
 
         # Connect to the broker
@@ -326,7 +340,11 @@ class SmartAgent(Client):
         incoming_message_buffer = []
 
         # Do a blocking call
-        self.send_handshake()
+        broker_public_key = None
+        self.client.publish(self.STATUS, 
+                     self.status_message(STATUS_CONNECTED), 
+                     qos=1)
+        
         while self.broker_public_key == None:
             time.sleep(0.1)
             mqtt_client.loop()
@@ -335,6 +353,12 @@ class SmartAgent(Client):
                 for message in incoming_message_buffer:
                     if message.topic == self.HANDSHAKE:
                         # Check whether it is a broker key message.
+                        try:
+                            payload = json.loads(message.payload.decode())
+                            self.broker_public_key = payload['public_key']
+                            print(self.broker_public_key)
+                        except:
+                            pass
                 incoming_message_buffer = []
             
 
@@ -344,12 +368,14 @@ class SmartAgent(Client):
         logging.info('Starting loop')
         self.client.loop_start()
       
-    def send_handshake(self):
-        self.client.publish(self.STATUS, 
-                            self.package({'status': STATUS_CONNECTED, 
-                                          'public_key': self.public_key.exportKey().decode()
-                                          }), 
-                            qos=1)
+    def status_message(self, status):
+        payload = {
+                   'status': status
+                   }
+        if status == STATUS_CONNECTED:
+            payload['public_key'] = self.public_key.exportKey().decode()
+        return self.package(payload)
+
                             
     def loop(self):
         """
@@ -360,7 +386,6 @@ class SmartAgent(Client):
         Note that it is not necessary to handle reconnection to the broker in 
         this function; that task is done by the paho-mqtt loop function. 
         """
-        global handshake
         global incoming_message_buffer
         
         # dump all incoming messages into a list and empty the string
@@ -454,11 +479,6 @@ class BrokerServices(Client):
             if time.time() - start_time > timeout:
                 raise TimeOutError("The program timed out while trying to connect to the broker!")
                 break
-            
-        # Share the broker's public
-        mqtt_client.publish(self.BROKER_KEY, 
-                            self.package({'public_key': self.public_key.exportKey().decode()}), 
-                            qos=1, retain=True)
                             
         # When connected, subscribe to the relevant channels
         mqtt_client.subscribe(self.STATUS, 1)
@@ -477,10 +497,10 @@ class BrokerServices(Client):
         self.client.loop_start()
     
     def respond_handshake(self, agent_name):
-        self.publish(topic_handshake(agent_name), 
-                            self.package({
-                                          }), 
-                            qos=1)
+        # Share the broker's public key
+        self.client.publish(topic_handshake(agent_name), 
+                            self.package({'public_key': self.public_key.exportKey().decode()}), 
+                            qos=1, retain=True)
                             
     def loop(self):
         """
@@ -520,6 +540,9 @@ class BrokerServices(Client):
                             try:
                                 self.devices[payload['source']] = RSA.importKey(payload['public_key'].encode())
                                 logging.info('Device ' + payload['source'] + ' connected')
+                                
+                                # Send back our own public key
+                                self.respond_handshake(payload['source'])
                             except Exception as e:
                                 print(e)
                                 logging.error(e)

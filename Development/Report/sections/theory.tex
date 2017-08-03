@@ -1,1 +1,16 @@
-This is theory
+### Architecture
+We chose to implement a three layer hierarchal network of devices [see figure X]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys, or executing secure cryptographic algorithms. Moving up the pyramid, many edge devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are devices and applications operating in the Cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
+
+Please note that this architecture represents a very simplified version of the full mF2C architecture. The mF2C architecture is far more flexible and comprehensive. 
+
+### Communication
+Communication between SAs and EDs is achieved via JSON packets sent over serial cable and/or Bluetooth. Both methods allow for a high data rate if required. Communication between SAs and the cloud is via wired and/or wireless TCP/IP network connections.
+ 
+We have chosen to use MQTT to facilitate communication at this upper layer. MQTT, which stands for Message Queue Telemetry Transport, is a lightweight messaging protocol designed specifically for Internet of Things systems. It relies on a publish-subscribe messaging pattern in which devices may subscribe to a topic to receive any messages subsequently published on it. A MQTT system requires that one device (in this case a machine in the cloud) acts as a broker. The broker is responsible for storing device subscriptions, handling connection status and distributing new messages based on topic.
+
+### Privacy
+public – anyone can see, message is not signed
+protected - use
+Communication
+MQTT – message telemetry transport queue
+leveraging mqtt to allow direct messages between devices using a number of inboxes. Have written API

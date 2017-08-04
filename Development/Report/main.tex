@@ -1,7 +1,16 @@
 \documentclass{article}
 \usepackage[utf8]{inputenc}
 \usepackage{subfiles} % To split sections into files without a page break
-\usepackage{graphicx} % For photos 
+\usepackage{graphicx} % For photos
+% For plotting graphs
+\usepackage{pgfplots}
+% For using dates in graphs
+\usepgfplotslibrary{dateplot}
+\usepgfplotslibrary[dateplot]
+\usetikzlibrary{pgfplots.dateplot}
+\usetikzlibrary[pgfplots.dateplot]
+
+
 
 \title{Internet of thingies - to actually be retitled ASAP}
 
@@ -28,6 +37,8 @@
 
 \section{Dissemination and Future Work}
 \subfile{sections/dissemination.tex}
+
+
 
 \section{Conclusion}
 \subfile{sections/conclusion.tex}

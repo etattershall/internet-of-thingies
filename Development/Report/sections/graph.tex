@@ -1,0 +1,17 @@
+\begin{center}
+    \begin{tikzpicture}
+    \begin{axis}[
+        title={Light Intensity over the 28th and 29th June},
+        xlabel={Time [HH:MM]},
+        ylabel={Arduino Reading [1024/5V]},
+        xlabel near ticks,
+        date coordinates in=x,
+        xticklabel style={rotate=90, 
+                          anchor=near xticklabel},
+        xticklabel=\hour:\minute
+    ]
+        \addplot [blue, mark=none] table [x=Datetime,y=Emma, col sep=tab] {LDR_dates.tsv};
+        \addplot [orange, mark=none] table [x=Datetime,y=Callum, col sep=tab] {LDR_dates.tsv};
+    \end{axis}
+    \end{tikzpicture}
+\end{center}

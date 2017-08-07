@@ -5,7 +5,7 @@
 % Sort out tenses
 % Pictures of the equipment
 
-We implemented a test bed for future development of a security protocol. Our proof-of-concept used standard IoT components to produce a system that moved data over the different levels of our architecture, demonstrating common features of a larger IoT system.
+We implemented a test bed for future development of a security protocol. Our proof-of-concept used standard IoT components to produce our architecture and move data over it, demonstrating common features of a larger IoT system.
 
 % ✔ We wanted to make a prototype for use as a test bed (or proof-of-concept) for future development of an IoT security protocol, blah.
 % ✔ Chose to use off-the-shelf component for maximum applicability, blah
@@ -13,13 +13,13 @@ We implemented a test bed for future development of a security protocol. Our pro
 
 \subsection{Equipment}
 \paragraph{}
-For Edge Devices, we used Arduino Unos which are inexpensive (£25-30), low powered and portable making them a popular choice for use with IoT. With 14 inputs and outputs (analog and digital), these microcontrollers can be loaded with pre-compiled programs to interact with sensors. To communicate with Smart Agents, we used Serial over either USB or Bluetooth (through the addition of a HC-05 Bluetooth module - see Figure \ref{fig:HC-05}).
+For Edge Devices, we used Arduino Unos which are inexpensive (£25-30), low powered and portable making them a popular choice for IoT. With 14 inputs and outputs (analog and digital), these microcontrollers can be loaded with pre-compiled programs to read from sensors and write to outputs. To communicate with Smart Agents, we used Serial over either USB or Bluetooth (through the addition of a HC-05 Bluetooth module - see Figure \ref{fig:HC-05}).
 
 
 \begin{figure}
     \centering
     \includegraphics[width=0.5\textwidth]{HC05.jpg}
-    \caption{The HC-05 chip for serial over Bluetooth. It costs roughly £4 and has a range of about 10m. Requiring a pin to pair the devices, it can have the role of either slave (wait for connection) or master (search for device to connect to).}
+    \caption{The HC-05 chip for serial over Bluetooth. It costs roughly £4 and has a range of about 10m. Requiring a pin to pair the devices, it can have the role of either slave (wait for connection passively) or master (search for the device and actively initiate connection).}
     \label{fig:HC-05}
 \end{figure}
 
@@ -39,27 +39,27 @@ We used STFC's SCD Cloud for access to a virtual machine running Scientific Linu
 \begin{figure}
     \centering
     \includegraphics[width=0.5\textwidth]{Architecture.png}
-    \caption{The architecture}
+    \caption{The architecture we implemented.}
     \label{fig:architecture}
 \end{figure}
 
 \paragraph{}
-The Cloud VM was setup as the MQTT broker using Mosquitto. There were three endpoints contacting it: Smart Agents, Broker Services and the web application. Using the Paho MQTT client library for Python, the Smart Agents acted as a gateway to the Cloud for any connected Edge Devices. If one Smart Agent could not directly connect to the hub, Bluetooth tethering was used to share the connection of a nearby Smart Agent. Broker Services ran on the Cloud as a Python application (also using Paho) to publish a list of currently connected devices for discovery. A Flask module (Flask-MQTT) served a web application, allowing a user to subscribe to topics for an overview of the data flows in the network.
+The Cloud VM was setup as the MQTT broker using Mosquitto. There were three endpoints contacting it: Smart Agents, Broker Services and the web application. Using the Paho MQTT client library for Python as well as the PyBluez module, the Smart Agents acted as a gateway to the Cloud for any connected Edge Devices. If one Smart Agent could not directly connect to the hub, Bluetooth tethering was used to share the connection of a nearby Smart Agent. Broker Services ran on the Cloud as a Python application (also using Paho) to publish a list of currently connected devices for discovery. A Flask module (Flask-MQTT) served a web application, allowing a user to subscribe to topics for an overview of the data flows in the network.
 
 \paragraph{}
 There were several problems with using Bluetooth. In our initial setup, the HC-05s were configured in slave mode with names according to a pattern. The Smart Agent would periodically scan for new devices according to the pattern and then attempt to connect. However, with only one Bluetooth chip, each PI could not send/receive while scanning so communications experienced a substantial delay (roughly 20s). To counter this, we used a fixed list of Edge Devices per Smart Agent which were always available. While seemingly restrictive, this would work adequately for a variety of use cases - such as a central Smart Agent controlling statically placed sensors in a house or vehicle. Additionally, the number of devices in each piconet was restricted to seven. This didn't affect our prototype but may be an issue for scaling in a real setup.
 
 \paragraph{}
-Depending on the use case, different communication technologies may be more applicable. If Edge Devices are relatively fixed, our serial protocol worked over USB - where there was no delay to scanning but was it was not wireless. Some protocols that are wireless - such as Zigbee - can connect a larger number of devices but require bespoke hardware at both ends. Our technique of sending a JSON encoded packet could work on any text communication protocol - we implemented it over USB and Bluetooth serial.
+Depending on the use case, different communication technologies may be more applicable. With Edge Devices that are relatively fixed, our serial protocol worked over USB - where there was no delay to scanning but was it was not wireless. Some protocols that are wireless - such as Zigbee - can connect a larger number of devices but require bespoke hardware at both ends. Our technique of sending a JSON encoded packet could work on any text communication protocol - we implemented it over USB and Bluetooth serial.
 
 \paragraph{}
-Edge devices interacted directly with the sensor, sending JSON packets of tagged data for the Smart Agent to forward to the broker. They were programmed in C which was compiled and uploaded using the Arduino IDE.
+Edge devices interacted directly with each sensor, sending JSON packets of tagged data for the Smart Agent to forward to the broker. The programs were written in C and were compiled and uploaded using the Arduino IDE.
 
 
 \begin{figure}
     \centering
     \includegraphics[width=0.7\textwidth]{setup.jpg}
-    \caption{A Raspberry PI (bottom) connected to an Arduino (top) relaying data passed to the MQTT broker in the Cloud from the Arduino after reading the attached sensors.}
+    \caption{A Raspberry PI (bottom) connected to an Arduino (top) relaying data to the MQTT broker in the Cloud passed from the Arduino which is reading the attached sensors.}
     \label{fig:setup}
 \end{figure}
 
@@ -102,7 +102,7 @@ Edge devices interacted directly with the sensor, sending JSON packets of tagged
 \end{figure}
 
 \paragraph{}
-Figure \ref{fig:graph} shows an example of data that was collected during a test of our system. Using four Smart Agents at different places around the office overnight, we connected Edge Devices with different sensors whose data was published to the MQTT broker for recording. Including LDRs, Thermistors and Humidity sensors, the different combination of detectors attached to each device demonstrated the system handling various data streams concurrently.
+Figure \ref{fig:graph} shows an example of data that was collected during a test of our system. Using four Smart Agents at different places around the office overnight, we connected Edge Devices with sensors whose data was published to the MQTT broker for recording. Including LDRs, Thermistors and Humidity sensors, the different combination of detectors attached to each device demonstrated the system handling various data streams concurrently.
 
 \paragraph{}
 The data itself is interesting. Emma's sensor - which was closer to a window - shows a steeper increase in light intensity in the morning compared to Callum's where the most significant increase comes later, from the lights turning on. At different points during the night (particularly around 9:15 at Callum's desk) the lights were turned back on indicating that someone returned to the office or something triggered their movement sensors. We used this setup as a part of STFC outreach events to record similar data for visiting children to analyse.

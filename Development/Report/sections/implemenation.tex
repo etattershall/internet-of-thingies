@@ -1,5 +1,4 @@
 % TODO:
-% Line about PI talks to PI
 % Use 'IoT'
 % Mention outreach? - perhaps to introduce the graph section
 % Ensure that what is written here about Bluetooth working with our setup if a set of devices is provided is correct
@@ -9,7 +8,6 @@
 We implemented a test bed for future development of a security protocol. Our proof-of-concept used standard IoT components to produce a system that moved data over the different levels of our architecture, demonstrating common features of a larger IoT system.
 
 % ✔ We wanted to make a prototype for use as a test bed (or proof-of-concept) for future development of an IoT security protocol, blah.
-% Also used for outreach activities, blah
 % ✔ Chose to use off-the-shelf component for maximum applicability, blah
 
 
@@ -29,7 +27,7 @@ For Edge Devices, we used Arduino Unos which are inexpensive (£25-30), low powe
 As Smart Agents, we used the Raspberry PI 3 which is a single board computer. Communication with Edge Devices and the Cloud was possible without any additional adapters over USB, Ethernet, WiFi and Bluetooth. The PI can run PC scale applications headless on its Linux operating system. Its low price, small form factor and low power requirement make it popular for IoT.
 
 \paragraph{}
-We used STFC's SCD Cloud for access to a virtual machine running Scientific Linux 7. A common LAN enabled TCP/IP communication between this machine and the Smart Agents and the web application.
+We used STFC's SCD Cloud for access to a virtual machine running Scientific Linux 7. A common LAN enabled TCP/IP communication between this machine and the Smart Agents or the web application.
 
 % ✔ We used Arduino Unos (£25-30) as edge devices. They have X inputs and outputs (analog and digital) and can be loaded with pre-compiled programs.
 % ✔ HC-05 chip for Bluetooth option (picture of HC-05, range=10m?, cost=£4...)
@@ -54,6 +52,17 @@ There were several problems with using Bluetooth. In our initial setup, the HC-0
 \paragraph{}
 Depending on the use case, different communication technologies may be more applicable. If Edge Devices are relatively fixed, our serial protocol worked over USB - where there was no delay to scanning but was it was not wireless. Some protocols that are wireless - such as Zigbee - can connect a larger number of devices but require bespoke hardware at both ends. Our technique of sending a JSON encoded packet could work on any text communication protocol - we implemented it over USB and Bluetooth serial.
 
+\paragraph{}
+Edge devices interacted directly with the sensor, sending JSON packets of tagged data for the Smart Agent to forward to the broker. They were programmed in C which was compiled and uploaded using the Arduino IDE.
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.7\textwidth]{setup.jpg}
+    \caption{A Raspberry PI (bottom) connected to an Arduino (top) relaying data passed to the MQTT broker in the Cloud from the Arduino after reading the attached sensors.}
+    \label{fig:setup}
+\end{figure}
+
 % ✔ Each edge device is identified by a unique ID which is a random number
 % ✔ Communication between Smart Agent and Edge via Bluetooth.
 % What is Bluetooth /why is it a good option for communicating with low memory/power/connectivity devices? PAIRING!
@@ -61,14 +70,10 @@ Depending on the use case, different communication technologies may be more appl
 % ✔ Broker (mosquitto) runs on cloud, as does telemetry and monitoring applications (broker services) and a flask app.
 % Pretty diagrams and pictures of the equipment
 % ✔ Diagram with the pretty logos on it I made for the pre-coffee talk. I’ll go find it.
+% ✔ Line about PI talks to PI
 
 
 \subsection{Data}
-
-% ✔ Pretty graph of some data collected
-% Graph, and also some brief waffle about what’s on the graph.
-% Picture of the Arduino/raspberry pi setup
-
 
 \begin{figure}
     \centering
@@ -100,4 +105,8 @@ Depending on the use case, different communication technologies may be more appl
 Figure \ref{fig:graph} shows an example of data that was collected during a test of our system. Using four Smart Agents at different places around the office overnight, we connected Edge Devices with different sensors whose data was published to the MQTT broker for recording. Including LDRs, Thermistors and Humidity sensors, the different combination of detectors attached to each device demonstrated the system handling various data streams concurrently.
 
 \paragraph{}
-The data itself is interesting. Emma's sensor - which was closer to a window - shows a steeper increase in light intensity in the morning compared to Callum's where the most significant increase comes later, from the lights turning on. At different points during the night (particularly around 9:15 at Callum's desk) the lights were turned back on indicating that someone returned to the office or something triggered the movement sensors. We used this setup as a part of STFC outreach events to record similar data for visiting children to analyse.
+The data itself is interesting. Emma's sensor - which was closer to a window - shows a steeper increase in light intensity in the morning compared to Callum's where the most significant increase comes later, from the lights turning on. At different points during the night (particularly around 9:15 at Callum's desk) the lights were turned back on indicating that someone returned to the office or something triggered their movement sensors. We used this setup as a part of STFC outreach events to record similar data for visiting children to analyse.
+
+% ✔ Also used for outreach activities, blah
+% ✔ Pretty graph of some data collected
+% ✔ Graph, and also some brief waffle about what’s on the graph.

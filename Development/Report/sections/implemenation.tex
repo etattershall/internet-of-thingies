@@ -53,7 +53,7 @@ There were several problems with using Bluetooth. In our initial setup, the HC-0
 Depending on the use case, different communication technologies may be more applicable. With Edge Devices that are relatively fixed, our serial protocol worked over USB - where there was no delay to scanning but was it was not wireless. Some protocols that are wireless - such as Zigbee - can connect a larger number of devices but require bespoke hardware at both ends. Our technique of sending a JSON encoded packet could work on any text communication protocol - we implemented it over USB and Bluetooth serial.
 
 \paragraph{}
-Edge devices interacted directly with each sensor, sending JSON packets of tagged data for the Smart Agent to forward to the broker. The programs were written in C and were compiled and uploaded using the Arduino IDE.
+Edge devices interacted directly with each sensor, sending JSON packets of tagged data for the Smart Agent to forward to the broker. The programs were written in C and were compiled and uploaded using the Arduino IDE. 
 
 
 \begin{figure}

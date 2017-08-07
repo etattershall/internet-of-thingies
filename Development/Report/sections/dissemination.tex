@@ -1,1 +1,14 @@
-This is dissemination
+\paragraph{}
+
+During the course of this project, we built up a substantial codebase which is available on our public GitHib repository [REF]. This includes the Python and C++ code used to interface between the Raspberry Pis and Arduinos and a Python API built on top of the paho-mqtt library that allows researchers to easily implement our architecture and security specification.
+
+\paragraph{}
+Our setup could be used to simulate the attack of a botnet. When testing a security protocol, our implementation would give a chance to test possible attack vectors on an IoT network. As the bulk of our setup uses TCP/IP for communication, it would be possible to virtualise the simulated attackers via Docker containers on machines on the same network - perhaps pretending to be Smart Agents. This would allow simulation of large scale attack (much greater than the number of physical devices we have available). Not only would this give an indication of the resistance of the protocol. It would also give a practical way to evaluate different protocols against each other, highlighting the strengths and weaknesses. Additionally, the response to unexpected events could be investigated.
+
+\paragraph{}
+With Smart Agents as sophisticated gateways, ostracising devices could be implemented in the event of a security breach. The Cloud could ignore connections from a specified list of compromised Smart Agents or they could ignore connections from specific Edge Devices. Provided that this list could be established in time, this would act as a barrier to prevent the flow of malicious data throughout the network.
+
+\paragraph{}
+One way to establish this list would be to apply machine learning. It might be possible to train a classifier on network activity to distinguish compromised devices. Our use of MQTT - where any application is free to subscribe to all topics - allows this classifier access to the number of communications from each machine and even the payload of those messages (where encryption isn't used). It is suspected that malicious devices would offer some kind of signal: perhaps a common payload or even just an abnormal number of messages at specific times which would be possible to spot by statistical or even classical techniques (peak detection).
+
+

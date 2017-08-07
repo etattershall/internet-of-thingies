@@ -1,17 +1,28 @@
 \documentclass{article}
 \usepackage[utf8]{inputenc}
 \usepackage{subfiles} % To split sections into files without a page break
-\usepackage{graphicx} % For photos 
+\usepackage{graphicx} % For photos
+\usepackage[margin=1in]{geometry}
 
-\title{Internet of thingies - to actually be retitled ASAP}
+% For plotting graphs
+\usepackage{pgfplots}
+\pgfplotsset{width=10cm,compat=1.9}
+% For using dates in graphs
+\usepgfplotslibrary{dateplot}
+\usepgfplotslibrary[dateplot]
+\usetikzlibrary{pgfplots.dateplot}
+\usetikzlibrary[pgfplots.dateplot]
+
+\title{Prototyping a secure, hierarchical Internet of Things system}
 
 \author{
-  Tattershall, Emma
+  C. Iddon
   \and
-  Iddon, Callum
+  E. Tattershall
+  \and
+  J. Jensen
 }
 \date{August 2017}
-
 
 \begin{document}
 

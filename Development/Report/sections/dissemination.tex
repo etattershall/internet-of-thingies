@@ -1,6 +1,6 @@
 \paragraph{}
 
-During the course of this project, we built up a substantial codebase which is available on our public GitHib repository [REF]. This includes the Python and C++ code used to interface between the Raspberry Pis and Arduinos and a Python API built on top of the paho-mqtt library that allows researchers to easily implement our architecture and security specification.
+During the course of this project, we built up a substantial codebase which is available on our public GitHib repository \cite{githubrepo}. This includes the Python and C++ code used to interface between the Raspberry Pis and Arduinos and a Python API built on top of the paho-mqtt library that allows researchers to easily implement our architecture and security specification.
 
 \paragraph{}
 Our setup could be used to simulate the attack of a botnet. When testing a security protocol, our implementation would give a chance to test possible attack vectors on an IoT network. As the bulk of our setup uses TCP/IP for communication, it would be possible to virtualise the simulated attackers via Docker containers on machines on the same network - perhaps pretending to be Smart Agents. This would allow simulation of large scale attack (much greater than the number of physical devices we have available). Not only would this give an indication of the resistance of the protocol. It would also give a practical way to evaluate different protocols against each other, highlighting the strengths and weaknesses. Additionally, the response to unexpected events could be investigated.

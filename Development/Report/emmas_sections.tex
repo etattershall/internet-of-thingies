@@ -135,4 +135,11 @@ When the Smart Agent leaves the network:
     \item broker-services records that the device has left the network
 \end{itemize}
 
+
+\section{Dissemination and Future Work}
+
+During the course of this project, we built up a substantial codebase which is available on our public GitHib repository [REF]. This includes the Python and C++ code used to interface between the Raspberry Pis and Arduinos and a Python API built on top of the paho-mqtt library that allows researchers to easily implement our architecture and security specification.
+
+In the future, we expect to virtualize our devices using a Docker containers. This will make it possible to simulate large scale systems without making a prohibitively large outlay on the associated hardware. Scenarios that could be explored include an external attack on the network, botnet detection and detecting and responding to an emergency.
+
 \end{document}

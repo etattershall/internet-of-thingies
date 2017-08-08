@@ -1,6 +1,6 @@
 \subsection{Architecture}
 
-Our architecture must be multilayered so that small, limited devices may be supported by more powerful hubs. Most of our potential use cases require that information be aggregated at some central cloud-based server. Therefore, we have chosen to implement a three layer hierarchical network of devices [see figure \ref{fig:simplified_architecture}]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys or executing secure cryptographic algorithms. Moving up the pyramid, a group of local edge devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are Cloud Agents; devices and applications that operate in the cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
+Our architecture must be multilayered so that small, limited devices may be supported by more powerful hubs. Most of our potential use cases require that information be aggregated at some central cloud-based server. Therefore, we have chosen to implement a three layer hierarchical network of devices [see figure \ref{fig:simplified_architecture}]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys or executing secure cryptographic algorithms. Moving up the pyramid, a group of local Edge Devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are Cloud Agents; devices and applications that operate in the cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
 
 \paragraph{}
 This architecture represents a simplified version of the full mF2C architecture that is being developed with our partners.
@@ -22,7 +22,7 @@ We have chosen to use a protocol called MQTT to facilitate communication at this
 
 \subsection{Privacy and security}
 
-mF2C defines three security levels \cite{mf2cwebsite}:
+There are three security levels defined by mF2C \cite{mf2cwebsite}:
 
 \begin{itemize}
     \item Public: No special protection requirements
@@ -59,22 +59,22 @@ We assign each agent a number of inboxes. When an agent would like to send a mes
 
 
 \subsubsection{Standard Inboxes}
-All smart agents subscribe to these topics, replacing 'agent1' with their ID:
+All smart agents subscribe to these topics, replacing \textit{agent1} with their ID:
 \begin{itemize}
-    \item mf2c/agent1/public
-    \item mf2c/agent1/public/pingreq
-    \item mf2c/agent1/public/pingack
-    \item mf2c/agent1/public/handshake
-    \item mf2c/agent1/protected
-    \item mf2c/agent1/private
+    \item \textit{mf2c/agent1/public}
+    \item \textit{mf2c/agent1/public/pingreq}
+    \item \textit{mf2c/agent1/public/pingack}
+    \item \textit{mf2c/agent1/public/handshake}
+    \item \textit{mf2c/agent1/protected}
+    \item \textit{mf2c/agent1/private}
 \end{itemize}
 
 \subsubsection{Inboxes for Broker Services}
-The Broker Services Cloud Agent has its own public/private key pair and is used to facilitate sending protected and private messages. It has all of the inboxes shown above (with 'broker-services' substituted for 'agent1') but additionally it subscribes to:
+The Broker Services Cloud Agent has its own public/private key pair and is used to facilitate sending protected and private messages. It has all of the inboxes shown above (with \textit{broker-services} substituted for \textit{agent1}) but additionally it subscribes to:
 
 \begin{itemize}
-    \item mf2c/broker-services/status
-    \item mf2c/broker-services/discovery
+    \item \textit{mf2c/broker-services/status}
+    \item \textit{mf2c/broker-services/discovery}
 \end{itemize}
 
 \subsubsection{Topics for Discovery}
@@ -86,40 +86,40 @@ In the topics above, the handshake topic is used for sharing public keys, while 
     \item Disconnected ungracefully (for unintentional disconnections; e.g. loss of internet service)
 \end{itemize}
 
-The broker-services/discovery topic is used by the broker to regularly post a list of the agents that have set their visibility appropriately.
+The \textit{broker-services/discovery} topic is used by the broker to regularly post a list of the agents that have set their visibility appropriately.
 
 \subsection{Sequence of events}
 
 \subsubsection{Smart Agent Arrival}
 When a Smart Agent arrives on the network:
 \begin{itemize}
-    \item The Smart Agent subscribes to its inbox topics
-    \item The Smart Agent publishes its new connection status on \textit{mf2c/broker-services/status}
-    \item The Smart Agent publishes its public key to \textit{mf2c/broker-services/handshake}
-    \item broker-services saves the name of the agent and its public key, then publishes its own key on \textit{mf2c/[agent name]/handshake}
+    \item The Smart Agent subscribes to its inbox topics.
+    \item The Smart Agent publishes its new connection status on \textit{mf2c/broker-services/status}.
+    \item The Smart Agent publishes its public key to \textit{mf2c/broker-services/handshake}.
+    \item Broker Services saves the name of the agent and its public key, then publishes its own key on \textit{mf2c/[agent name]/handshake}.
 \end{itemize}
 
 \subsubsection{Normal Communication}
 While the Smart Agent is on the network:
 \begin{itemize}
-    \item The Smart Agent checks its inbox topics for new messages
-    \item If any of those messages is a ping request (i.e. it was published on topic \textit{mf2c/[agent name]/public/pingreq}), it sends back a ping acknowledgement on \textit{mf2c/[ping source name]/public/pingack}
-    \item The Smart Agent returns a list of decrypted message objects to the user
+    \item The Smart Agent checks its inbox topics for new messages.
+    \item If any of those messages is a ping request (i.e. it was published on topic \textit{mf2c/[agent name]/public/pingreq}), it sends back a ping acknowledgement on \textit{mf2c/[ping source name]/public/pingack}.
+    \item The Smart Agent returns a list of decrypted message objects to the user.
 \end{itemize}
 
 \subsubsection{Private Communication}
 When the Smart Agent sends a private message to one or more recipients:
 \begin{itemize}
-    \item The Smart Agent uses its own private key to sign a hash of its own name and adds this signature to the message
-    \item The Smart Agent encrypts the message payload using broker-services' public key
-    \item The Smart Agent publishes the packaged message to \textit{mf2c/broker-services/private}
-    \item broker-services decrypts the message payload and verifies the signature. It signs the message and encrypts the payload using its own private key.
-    \item broker-services publishes the message to each of the recipients private inbox topics (e.g. \textit{mf2c/[destination agent name]/private}
+    \item The Smart Agent uses its own private key to sign a hash of its own name and adds this signature to the message.
+    \item The Smart Agent encrypts the message payload using broker-services' public key.
+    \item The Smart Agent publishes the packaged message to \textit{mf2c/broker-services/private}.
+    \item Broker Services decrypts the message payload and verifies the signature. It signs the message and encrypts the payload using its own private key.
+    \item Broker Services publishes the message to each of the recipients private inbox topics (e.g. \textit{mf2c/[destination agent name]/private}.
 \end{itemize}
 
 \subsubsection{Smart Agent Departure}
 When the Smart Agent leaves the network:
 \begin{itemize}
-    \item It publishes a disconnect message on \textit{mf2c/broker-services/status}
-    \item broker-services records that the device has left the network
+    \item It publishes a disconnect message on \textit{mf2c/broker-services/status}.
+    \item Broker Services records that the device has left the network.
 \end{itemize}

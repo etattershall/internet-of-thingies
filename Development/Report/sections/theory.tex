@@ -3,7 +3,7 @@
 Our architecture must be multilayered so that small, limited devices may be supported by more powerful hubs. Most of our potential use cases require that information be aggregated at some central cloud-based server. Therefore, we have chosen to implement a three layer hierarchical network of devices [see figure \ref{fig:simplified_architecture}]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys or executing secure cryptographic algorithms. Moving up the pyramid, a group of local edge devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are Cloud Agents; devices and applications that operate in the cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
 
 \paragraph{}
-This architecture represents a very simplified version of the full mF2C architecture that is being developed by our partners.
+This architecture represents a simplified version of the full mF2C architecture that is being developed with our partners.
 
 \begin{figure}[h]
   \centering
@@ -18,7 +18,7 @@ This architecture represents a very simplified version of the full mF2C architec
 Communication between Smart Agents and Edge Devices is achieved via JSON packets sent over serial while between Smart Agents and the Cloud Agent is via wired and/or wireless TCP/IP network connections.
 
 \paragraph{}
-We have chosen to use a protocol called MQTT to facilitate communication at this upper layer. MQTT, which stands for Message Queue Telemetry Transport, is a lightweight messaging protocol designed specifically for Internet of Things systems. It relies on a publish-subscribe messaging pattern in which devices may subscribe to a topic to receive any messages subsequently published on it. A MQTT system requires that one device (in this case a machine in the cloud) acts as a broker. The broker is responsible for storing device subscriptions, handling connection status and distributing new messages based on topic.
+We have chosen to use a protocol called MQTT to facilitate communication at this upper layer. MQTT, which stands for Message Queue Telemetry Transport, is a lightweight messaging protocol designed specifically for IoT. It relies on a publish-subscribe messaging pattern in which devices may subscribe to a topic to receive any messages subsequently published on it. A MQTT system requires that one device (in this case a machine in the cloud) acts as a broker. The broker is responsible for storing device subscriptions, handling connection status and distributing new messages based on topic.
 
 \subsection{Privacy and security}
 
@@ -52,10 +52,10 @@ Each Agent generates a public/private key pair when it is initialised, or loads 
 \subsection{MQTT Topic Structure}
 
 
-Using MQTT protocol for secure point-to-point messaging requires careful thinking on the chosen structure of topics. In MQTT, topics are hierarchical and subscription messages allow wildcards, so that if an agent subscribes to \textit{mf2c/\#} (where \# is the wildcard symbol), it receives messages sent to \textit{mf2c}, \textit{mf2c/agent1}, \textit{mf2c/agent2} and \textit{mf2c/agent1/edge1}. Therefore, we assign each agent a number of inboxes. When an agent would like to send a message to another agent, it sends it to that agent's relevant inbox. It also regularly checks its own inboxes for new messages.
+Using the MQTT protocol for secure point-to-point messaging requires careful thinking on the chosen structure of topics. Topics are hierarchical and subscription messages allow wildcards, so that if an agent subscribes to \textit{mf2c/\#} (where \# is the wildcard symbol), it receives messages sent to \textit{mf2c}, \textit{mf2c/agent1}, \textit{mf2c/agent2} and \textit{mf2c/agent1/edge1}.
 
 \paragraph{}
-It also must be possible for one agent to ping any other agent to verify its connection status and speed.
+We assign each agent a number of inboxes. When an agent would like to send a message to another agent, it sends it to that agent's relevant inbox. It also regularly checks its own inboxes for new messages. Some of these inboxes are used in ping to verify connection status and speed.
 
 
 \subsubsection{Standard Inboxes}
@@ -70,7 +70,7 @@ All smart agents subscribe to these topics, replacing 'agent1' with their ID:
 \end{itemize}
 
 \subsubsection{Inboxes for Broker Services}
-The Broker Services Cloud Agent has its own public/private key pair and is used to facilitate sending protected and private messages. It has all of the inboxes shown above(with 'broker-services' substituted for 'agent1', but additionally it subscribes to:
+The Broker Services Cloud Agent has its own public/private key pair and is used to facilitate sending protected and private messages. It has all of the inboxes shown above (with 'broker-services' substituted for 'agent1') but additionally it subscribes to:
 
 \begin{itemize}
     \item mf2c/broker-services/status

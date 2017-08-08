@@ -89,7 +89,7 @@ Edge devices interacted directly with each sensor, sending JSON packets of tagge
         xmajorgrids=true,
         grid style=dashed,
         legend pos=outer north east,
-        legend entries={Emma,Callum},
+        legend entries={Sensor 1,Sensor 2},
     ]
         \addplot [blue, mark=none] table [x=Datetime,y=Emma, col sep=tab] {LDR_dates.tsv};
         \addplot [orange, mark=none] table [x=Datetime,y=Callum, col sep=tab] {LDR_dates.tsv};
@@ -102,7 +102,7 @@ Edge devices interacted directly with each sensor, sending JSON packets of tagge
 Figure \ref{fig:graph} shows an example of data that was collected during a test of our system. Using four Smart Agents at different places around the office overnight, we connected Edge Devices with sensors whose data was published to the MQTT broker for recording. Including LDRs, Thermistors and Humidity sensors, the different combination of detectors attached to each device demonstrated the system handling various data streams concurrently.
 
 \paragraph{}
-The data itself is interesting. Emma's sensor - which was closer to a window - shows a steeper increase in light intensity in the morning compared to Callum's where the most significant increase comes later, from the lights turning on. At different points during the night (particularly around 9:15 at Callum's desk) the lights were turned back on indicating that someone returned to the office or something triggered their movement sensors. We used this setup as a part of STFC outreach events to record similar data for visiting children to analyse.
+The data itself is interesting. Sensor 1 - which was closer to a window - shows a steeper increase in light intensity in the morning compared to Sensor 2 where the most significant increase comes later, from the lights turning on. At different points during the night (particularly around 9:15 near Sensor 2) the lights were turned back on indicating that someone returned to the office or something triggered their movement sensors. We used this setup as a part of STFC outreach events to record similar data for visiting children to analyse.
 
 % ✔ Also used for outreach activities, blah
 % ✔ Pretty graph of some data collected

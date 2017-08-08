@@ -5,7 +5,6 @@ Our architecture must be multilayered so that small, limited devices may be supp
 \paragraph{}
 This architecture represents a very simplified version of the full mF2C architecture that is being developed by our partners.
 
-
 \begin{figure}[h]
   \centering
     \includegraphics[width=0.7\textwidth]{simplified_architecture}
@@ -17,7 +16,7 @@ This architecture represents a very simplified version of the full mF2C architec
 \subsection{Communication}
 
 Communication between Smart Agents and Edge Devices is achieved via JSON packets sent over serial while between Smart Agents and the Cloud Agent is via wired and/or wireless TCP/IP network connections.
- 
+
 \paragraph{}
 We have chosen to use a protocol called MQTT to facilitate communication at this upper layer. MQTT, which stands for Message Queue Telemetry Transport, is a lightweight messaging protocol designed specifically for Internet of Things systems. It relies on a publish-subscribe messaging pattern in which devices may subscribe to a topic to receive any messages subsequently published on it. A MQTT system requires that one device (in this case a machine in the cloud) acts as a broker. The broker is responsible for storing device subscriptions, handling connection status and distributing new messages based on topic.
 
@@ -33,7 +32,7 @@ mF2C defines three security levels \cite{mf2cwebsite}:
 
 \begin{table}[h!]
     \begin{center}
-        \begin{tabular}{ |p{2cm}|p{3cm}|p{3cm}|p{4cm}| } 
+        \begin{tabular}{ |p{2cm}|p{3cm}|p{3cm}|p{4cm}| }
             \hline
             Security level & Sender signature & Payload encryption & Example uses \\ \hline
             Public & No & No & Directory of airport shops \\ \hline
@@ -44,9 +43,9 @@ mF2C defines three security levels \cite{mf2cwebsite}:
         \caption{Security levels specification}
         \label{table:secure_levels}
     \end{center}
-\end{table}    
+\end{table}
 
-Each Agent generates a public/private key pair when it is initialised, or loads one from a file. Rather than have each agent store the public keys of every other device on the network, a Cloud Agent that we call Broker Services facilitates secure message delivery. Each Smart Agent knows only its own public and private keys and the public key of the Cloud Agent. The Cloud Agent maintains a list of all the Smart Agents that have previously connected, their current connection status and their public keys. When Alice wishes to send a message to Bob via her device, her Smart Agent encrypts the message with the Cloud Agent's public key and sends it up the hierarchy. The Cloud Agent then decrypts the message and re-encypts it with Bob's public key before sending it back down the hierarchy to his device.  
+Each Agent generates a public/private key pair when it is initialised, or loads one from a file. Rather than have each agent store the public keys of every other device on the network, a Cloud Agent that we call Broker Services facilitates secure message delivery. Each Smart Agent knows only its own public and private keys and the public key of the Cloud Agent. The Cloud Agent maintains a list of all the Smart Agents that have previously connected, their current connection status and their public keys. When Alice wishes to send a message to Bob via her device, her Smart Agent encrypts the message with the Cloud Agent's public key and sends it up the hierarchy. The Cloud Agent then decrypts the message and re-encypts it with Bob's public key before sending it back down the hierarchy to his device.
 
 
 
@@ -58,8 +57,9 @@ Using MQTT protocol for secure point-to-point messaging requires careful thinkin
 \paragraph{}
 It also must be possible for one agent to ping any other agent to verify its connection status and speed.
 
-\paragraph{}
-For agent1, the inboxes are:
+
+\subsubsection{Standard Inboxes}
+All smart agents subscribe to these topics, replacing 'agent1' with their ID:
 \begin{itemize}
     \item mf2c/agent1/public
     \item mf2c/agent1/public/pingreq
@@ -69,6 +69,7 @@ For agent1, the inboxes are:
     \item mf2c/agent1/private
 \end{itemize}
 
+\subsubsection{Inboxes for Broker Services}
 The Broker Services Cloud Agent has its own public/private key pair and is used to facilitate sending protected and private messages. It has all of the inboxes shown above(with 'broker-services' substituted for 'agent1', but additionally it subscribes to:
 
 \begin{itemize}
@@ -76,6 +77,7 @@ The Broker Services Cloud Agent has its own public/private key pair and is used 
     \item mf2c/broker-services/discovery
 \end{itemize}
 
+\subsubsection{Topics for Discovery}
 
 In the topics above, the handshake topic is used for sharing public keys, while the \textit{broker-services/status} message is used by agents reporting a change in their connection status, where connection status is one of:
 \begin{itemize}
@@ -84,10 +86,11 @@ In the topics above, the handshake topic is used for sharing public keys, while 
     \item Disconnected ungracefully (for unintentional disconnections; e.g. loss of internet service)
 \end{itemize}
 
-The broker-services/discovery topic is used by the broker to regularly post a list of the agents that have set their visibility appropriately. 
+The broker-services/discovery topic is used by the broker to regularly post a list of the agents that have set their visibility appropriately.
 
 \subsection{Sequence of events}
 
+\subsubsection{Smart Agent Arrival}
 When a Smart Agent arrives on the network:
 \begin{itemize}
     \item The Smart Agent subscribes to its inbox topics
@@ -96,6 +99,7 @@ When a Smart Agent arrives on the network:
     \item broker-services saves the name of the agent and its public key, then publishes its own key on \textit{mf2c/[agent name]/handshake}
 \end{itemize}
 
+\subsubsection{Normal Communication}
 While the Smart Agent is on the network:
 \begin{itemize}
     \item The Smart Agent checks its inbox topics for new messages
@@ -103,6 +107,7 @@ While the Smart Agent is on the network:
     \item The Smart Agent returns a list of decrypted message objects to the user
 \end{itemize}
 
+\subsubsection{Private Communication}
 When the Smart Agent sends a private message to one or more recipients:
 \begin{itemize}
     \item The Smart Agent uses its own private key to sign a hash of its own name and adds this signature to the message
@@ -112,7 +117,7 @@ When the Smart Agent sends a private message to one or more recipients:
     \item broker-services publishes the message to each of the recipients private inbox topics (e.g. \textit{mf2c/[destination agent name]/private}
 \end{itemize}
 
-
+\subsubsection{Smart Agent Departure}
 When the Smart Agent leaves the network:
 \begin{itemize}
     \item It publishes a disconnect message on \textit{mf2c/broker-services/status}

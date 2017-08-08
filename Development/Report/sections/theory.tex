@@ -52,7 +52,7 @@ Each Agent generates a public/private key pair when it is initialised, or loads 
 \subsection{MQTT Topic Structure}
 
 
-Using MQTT protocol for secure point-to-point messaging requires careful thinking on the chosen structure of topics. In MQTT, topics are hierarchical and subscription messages allow wildcards, so that if an agent subscribes to \textit{test/\#} (where \# is the wildcard symbol), it receives messages sent to \textit{mf2c}, \textit{mf2c/agent1}, \textit{mf2c/agent2} and \textit{mf2c/agent1/edge1}. Therefore, we assign each agent a number of inboxes. When an agent would like to send a message to another agent, it sends it to that agent's relevant inbox. It also regularly checks its own inboxes for new messages.
+Using MQTT protocol for secure point-to-point messaging requires careful thinking on the chosen structure of topics. In MQTT, topics are hierarchical and subscription messages allow wildcards, so that if an agent subscribes to \textit{mf2c/\#} (where \# is the wildcard symbol), it receives messages sent to \textit{mf2c}, \textit{mf2c/agent1}, \textit{mf2c/agent2} and \textit{mf2c/agent1/edge1}. Therefore, we assign each agent a number of inboxes. When an agent would like to send a message to another agent, it sends it to that agent's relevant inbox. It also regularly checks its own inboxes for new messages.
 
 \paragraph{}
 It also must be possible for one agent to ping any other agent to verify its connection status and speed.

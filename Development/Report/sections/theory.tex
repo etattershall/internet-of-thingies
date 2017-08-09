@@ -1,15 +1,12 @@
 \subsection{Architecture}
 
-Our architecture must be multilayered so that small, limited devices may be supported by more powerful hubs. Most of our potential use cases require that information be aggregated at some central cloud-based server. Therefore, we have chosen to implement a three layer hierarchical network of devices [see figure \ref{fig:simplified_architecture}]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys or executing secure cryptographic algorithms. Moving up the pyramid, a group of local Edge Devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are Cloud Agents; devices and applications that operate in the cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
-
-\paragraph{}
-This architecture represents a simplified version of the full mF2C architecture that is being developed with our partners.
+Our architecture must be multilayered so that small, limited devices may be supported by more powerful hubs. Most of our potential use cases require that information be aggregated at some central cloud-based server. Therefore, we have chosen to implement a three layer hierarchical network of devices [see Figure 1]. At the bottom of the hierarchy are Edge Devices; microcontrollers with low memory, power and connectivity which are not capable of storing and/or transmitting large cryptographic keys or executing secure cryptographic algorithms. Moving up the pyramid, a group of local Edge Devices may be managed by a single Smart Agent, a more powerful device with an operating system and full TCP/IP network connectivity. At the top of the hierarchy are Cloud Agents; devices and applications that operate in the cloud. These devices link Smart Agents together, provide telemetry, monitoring and data aggregation and can take coordinated action in the event of a suspected attack on the network.
 
 \begin{figure}[h]
   \centering
     \includegraphics[width=0.7\textwidth]{simplified_architecture}
     \label{fig:simplified_architecture}
-    \caption{Architecture diagram}
+    \caption{Architecture diagram: this architecture represents a simplified version of the full mF2C architecture that is being developed with our partners.}
 \end{figure}
 
 
